@@ -68,10 +68,11 @@ services:
         chunky
         bluemap
         carpet
-        luckperms
         servux
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
+        luckperms
+        fabric-permissions-api
         tabtps
         appleskin
         netherportalfix
