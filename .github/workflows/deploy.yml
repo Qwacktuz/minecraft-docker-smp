@@ -17,16 +17,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Debug secrets
-        run: |
-          if [ -z "${{ secrets.TS_OAUTH_CLIENT_ID }}" ]; then echo "CLIENT ID missing"; fi
-          if [ -z "${{ secrets.TS_OAUTH_SECRET }}" ]; then echo "SECRET missing"; fi
+      # - name: Debug environment variables
+      #   run: |
+      #     if [ -z "${{ secrets.TS_OAUTH_CLIENT_ID }}" ]; then echo "CLIENT ID missing"; fi
+      #     if [ -z "${{ secrets.TS_OAUTH_CLIENT_SECRET }}" ]; then echo "SECRET missing"; fi
 
       - name: Authenticate with Tailscale
         uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags: tag:ci
 
       - name: Copy App Files
