@@ -71,6 +71,7 @@ services:
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
         calcmod
+        tabtps
         appleskin
         netherportalfix
         balm # netherportalfix dep
