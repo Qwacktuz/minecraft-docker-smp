@@ -5,19 +5,19 @@ variable "hcloud_token" {
   sensitive   = true
 }
 
-variable "tailscale_oauth_client_id" {
+variable "ts_oauth_client_id" {
   description = "Tailscale OAuth Client ID"
   type        = string
   sensitive   = true
 }
 
-variable "tailscale_oauth_client_secret" {
+variable "ts_oauth_client_secret" {
   description = "Tailscale OAuth Client Secret"
   type        = string
   sensitive   = true
 }
 
-variable "tailscale_tailnet" {
+variable "ts_tailnet" {
   description = "Tailscale tailnet name (e.g. 'user.github')"
   type        = string
 }
