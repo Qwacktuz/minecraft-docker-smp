@@ -67,10 +67,10 @@ services:
         chunky
         bluemap
         carpet
+        luckperms
         servux
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
-        calcmod
         tabtps
         appleskin
         netherportalfix
