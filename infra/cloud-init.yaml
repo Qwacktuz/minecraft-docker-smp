@@ -1,0 +1,57 @@
+users:
+  - name: ${username}
+    groups: sudo
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - ${ssh_pub_key}
+
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - git
+  - tree
+  - vim
+  - unzip
+  - ufw
+  - fastfetch # we <3 bloat
+  - fail2ban
+
+write_files:
+  - path: /etc/sysctl.d/99-tailscale.conf
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+  - path: /etc/ssh/sshd_config.d/minecraft-hardening.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+
+runcmd:
+  - [ sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log" ]
+  - sysctl -p /etc/sysctl.d/99-tailscale.conf
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - tailscale up --authkey=${tailscale_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
+
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - usermod -aG docker ${username}
+
+  # Ensure UFW is installed (Debian 13 might have minimal base)
+  - apt-get update
+  - apt-get install -y ufw
+  
+  # Firewall rules
+  - /usr/sbin/ufw default deny incoming
+  - /usr/sbin/ufw default allow outgoing
+  - /usr/sbin/ufw allow 22/tcp comment 'SSH Public (HCloud Firewall handles restriction)'
+  - /usr/sbin/ufw allow 25565/tcp comment 'Minecraft'
+  - /usr/sbin/ufw allow 25565/udp comment 'Minecraft'
+  - /usr/sbin/ufw allow 24454/udp comment 'SimpleVoiceChat'
+  - /usr/sbin/ufw allow in on tailscale0 comment 'Tailscale Internal'
+  - /usr/sbin/ufw allow 41641/udp comment 'Tailscale WG'
+  - /usr/sbin/ufw --force enable
+  
+  - [ sh, -c, "echo 'Bootstrapping finished.' >> /var/log/bootstrap.log" ]

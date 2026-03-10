@@ -1,0 +1,50 @@
+# Temporarily ignore
+.gitlab-ci.yml
+
+# Environment variables
+.env
+.env.local
+.secrets
+.vars
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info
+.terraformrc
+terraform.rc
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore mc data
+data/
+backups/
+
+# Local prometheus data
+prometheus_data/
+grafana_data/
+
+# OS specific
+.DS_Store
+Thumbs.db

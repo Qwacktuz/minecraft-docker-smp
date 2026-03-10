@@ -1,0 +1,57 @@
+#cloud-config
+users:
+  - name: ${username}
+    groups: users, sudo
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+package_update: true
+package_upgrade: true
+packages:
+  # Devtools
+  - curl
+  - git
+  - tree
+  - vim
+  - unzip
+  - fastfetch
+
+  # Required for rootless
+  - uidmap
+  - dbus-user-session
+  - fuse-overlayfs
+  - slirp4netns # replace iptables with userspace networking
+
+write_files:
+  - path: /etc/sysctl.d/99-tailscale.conf
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+runcmd:
+  - ufw allow 22/tcp
+  - ufw allow 25565/tcp
+  - ufw allow 25565/udp
+  - ufw allow 24454/udp
+  - ufw --force enable
+
+  # 1. Setup Tailscale
+  - sysctl -p /etc/sysctl.d/99-tailscale.conf
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - tailscale up --authkey=${tailscale_auth_key} --ssh --hostname=${hostname}
+
+  # 2. Setup Rootless Docker prereqs
+  - loginctl enable-linger ${username}
+
+  # 3. Install Rootless Docker as the user
+  - sudo -u ${username} -i sh -c "curl -fsSL https://get.docker.com/rootless | sh"
+
+  # 4. Configure env vars for the user (so manual SSH works nicely)
+  - echo "export PATH=/home/${username}/bin:\$PATH" >> /home/${username}/.bashrc
+  - echo "export DOCKER_HOST=unix:///run/user/$(id -u ${username})/docker.sock" >> /home/${username}/.bashrc
+
+  # 5. Ensure the service starts on boot
+  - sudo -u ${username} systemctl --user enable docker
+  - sudo -u ${username} systemctl --user start docker

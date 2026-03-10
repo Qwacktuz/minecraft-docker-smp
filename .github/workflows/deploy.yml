@@ -1,0 +1,72 @@
+name: Minecraft Stack CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # -- Application (Docker Compose) ---
+  deploy:
+    name: Deploy Application
+    # needs: infra # TODO: add opentofu infra job
+    runs-on: ubuntu-latest
+    environment: mc-prod
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate with Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID || secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET || secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Copy App Files
+        uses: appleboy/scp-action@v1
+        with:
+          # host: ${{ needs.infra.outputs.server_ip }}
+          host: ${{ vars.TS_HOST }}
+          username: ${{ vars.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "./*,!infra,!.git,!.github"
+          target: "/home/${{ vars.USERNAME }}/app"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.TS_HOST }}
+          username: ${{ vars.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/app
+
+            if docker compose ps --services --filter "status=running" | grep -q "minecraft-service"; then
+              docker compose exec -T minecraft-service rcon-cli "say §cSystem update initiated..."
+              docker compose exec -T minecraft-service rcon-cli "save-all"
+              sleep 5
+            fi
+
+            cat .env.secrets > .env
+            cat <<EOF >> .env
+            TS_IP=$(tailscale ip -4)
+            DOCKER_UID=$(id -u)
+            DOCKER_GID=$(id -g)
+            USERNAME=$(whoami)
+            EOF
+
+            chmod 600 .env
+
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker system prune -f
+
+            sleep 10
+            if docker compose ps --services --filter "status=running" | grep -q "minecraft-service"; then
+              docker compose exec -T minecraft-service rcon-cli "title @a clear" || true
+              docker compose exec -T minecraft-service rcon-cli "playsound entity.player.levelup master @a" || true
+              docker compose exec -T minecraft-service rcon-cli "say §aDeployment complete! Server is stable." || true
+              docker compose exec -T minecraft-service rcon-cli "title @a actionbar {\"text\":\"§aSystem Update Complete\", \"bold\":true}" || true
+            fi

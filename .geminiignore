@@ -1,0 +1,17 @@
+# Dependency directories
+node_modules/
+dist/
+build/
+
+# Log files
+*.log
+logs/
+
+# Cache files
+.cache/
+.temp/
+
+# Large resource files
+*.mp4
+*.mkv
+*.zip

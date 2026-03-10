@@ -1,0 +1,95 @@
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// Scrape minecraft 
+prometheus.scrape "minecraft_metrics" {
+	targets = [{
+		__address__ = "minecraft-service:25585",
+	}]
+	forward_to      = [prometheus.remote_write.default.receiver]
+	job_name        = "minecraft_metrics"
+	scrape_interval = "10s"
+}
+
+// Node exporter integration
+discovery.relabel "node_exporter" {
+  targets = prometheus.exporter.unix.node_exporter.targets
+
+  rule {
+    target_label = "instance"
+    replacement = constants.hostname
+  }
+
+  rule {
+    target_label = "job"
+    replacement = "integrations/node_exporter"
+  }
+}
+
+// Node exporter configuration for system metrics
+prometheus.exporter.unix "node_exporter" {
+  rootfs_path = "/host/rootfs"
+  sysfs_path = "/host/sys"
+  procfs_path = "/host/proc"
+  udev_data_path = "/host/run/udev/data"
+
+  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
+  enable_collectors = ["meminfo"]
+
+  filesystem {
+    fs_types_exclude = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|tmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+    mount_points_exclude = "^/(dev|proc|run/credentials/.+|sys|var/lib/docker/.+)($|/)"
+    mount_timeout = "5s"
+  }
+
+  netclass {
+    ignored_devices = "^(veth.*|cali.*|[a-f0-9]{15})$"
+  }
+
+  netdev {
+    device_exclude = "^(veth.*|cali.*|[a-f0-9]{15})$"
+  }
+}
+
+prometheus.scrape "node_exporter" {
+	scrape_interval = "15s"
+	targets = discovery.relabel.node_exporter.output
+	forward_to = [prometheus.remote_write.default.receiver]
+}
+
+discovery.docker "all_containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Filter to find the minecraft container only
+discovery.relabel "minecraft_filter" {
+  targets = discovery.docker.all_containers.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex = "/.*(fabric-server).*" 
+    action = "keep"
+  }
+  
+  rule {
+    action = "replace"
+    target_label = "job"
+    replacement = "fabric-server_logs"
+  }
+}
+
+// Define where to send logs (loki container)
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+loki.source.docker "minecraft_logs" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.minecraft_filter.output
+  forward_to = [loki.write.default.receiver]
+}
+
