@@ -30,10 +30,10 @@ write_files:
       PubkeyAuthentication yes
 
 runcmd:
-  - [ sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log" ]
+  - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
   - sysctl -p /etc/sysctl.d/99-tailscale.conf
   - curl -fsSL https://tailscale.com/install.sh | sh
-  - tailscale up --authkey=${tailscale_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
+  - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
 
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
@@ -42,7 +42,7 @@ runcmd:
   # Ensure UFW is installed (Debian 13 might have minimal base)
   - apt-get update
   - apt-get install -y ufw
-  
+
   # Firewall rules
   - /usr/sbin/ufw default deny incoming
   - /usr/sbin/ufw default allow outgoing
@@ -53,5 +53,5 @@ runcmd:
   - /usr/sbin/ufw allow in on tailscale0 comment 'Tailscale Internal'
   - /usr/sbin/ufw allow 41641/udp comment 'Tailscale WG'
   - /usr/sbin/ufw --force enable
-  
-  - [ sh, -c, "echo 'Bootstrapping finished.' >> /var/log/bootstrap.log" ]
+
+  - [sh, -c, "echo 'Bootstrapping finished.' >> /var/log/bootstrap.log"]

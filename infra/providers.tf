@@ -26,7 +26,7 @@ provider "hcloud" {
 }
 
 provider "tailscale" {
-  oauth_client_id     = var.tailscale_oauth_client_id
-  oauth_client_secret = var.tailscale_oauth_client_secret
-  tailnet             = var.tailscale_tailnet
+  oauth_client_id     = var.ts_oauth_client_id
+  oauth_client_secret = var.ts_oauth_client_secret
+  tailnet             = var.ts_tailnet
 }

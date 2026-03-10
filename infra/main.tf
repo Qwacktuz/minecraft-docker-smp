@@ -12,7 +12,7 @@ data "http" "runner_ip" {
 }
 
 # Generate a one-time ephemeral Tailscale Auth key using OAuth credentials
-resource "ts_tailnet_key" "server_key" {
+resource "tailscale_tailnet_key" "server_key" {
   reusable      = false
   ephemeral     = true
   preauthorized = true
@@ -28,7 +28,7 @@ data "cloudinit_config" "minecraft_cfg" {
   part {
     content_type = "text/cloud-config"
     content = templatefile("${path.module}/cloud-init.yaml", {
-      ts_authkey  = ts_tailnet_key.server_key.key
+      ts_authkey  = tailscale_tailnet_key.server_key.key
       hostname    = var.server_name
       username    = var.username
       ssh_pub_key = var.ssh_public_key
@@ -88,6 +88,7 @@ resource "hcloud_server" "minecraft" {
 
   lifecycle {
     prevent_destroy = true # Set to true when statble to prevent deleting state
+    ignore_changes  = [user_data]
   }
 }
 
