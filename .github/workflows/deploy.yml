@@ -56,13 +56,6 @@ jobs:
             git fetch origin "$BRANCH"
             git reset --hard "origin/$BRANCH"
 
-            if docker compose ps --services --filter "status=running" | grep -q "fabric-server"; then
-              echo "Notifying players..."
-              docker compose exec -T fabric-server rcon-cli "say §cSystem update initiated..."
-              docker compose exec -T fabric-server rcon-cli "save-all"
-              sleep 5
-            fi
-
             echo "Generating runtime environment..."
             cat .env.secrets > .env
             cat <<EOF >> .env
@@ -73,6 +66,13 @@ jobs:
             EOF
 
             chmod 600 .env
+
+            if docker compose ps --services --filter "status=running" | grep -q "fabric-server"; then
+              echo "Notifying players..."
+              docker compose exec -T fabric-server rcon-cli "say §cSystem update initiated..."
+              docker compose exec -T fabric-server rcon-cli "save-all"
+              sleep 5
+            fi
 
             echo "Pulling container images..."
             docker compose pull
