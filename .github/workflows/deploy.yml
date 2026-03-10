@@ -46,14 +46,34 @@ jobs:
           username: ${{ vars.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/app
+            APP_DIR="$HOME/app"
+            REPO="https://github.com/Qwacktuz/minecraft-smp.git"
+            BRANCH="main"
+            SERVICE="fabric-server"
 
-            if docker compose ps --services --filter "status=running" | grep -q "minecraft-service"; then
-              docker compose exec -T minecraft-service rcon-cli "say §cSystem update initiated..."
-              docker compose exec -T minecraft-service rcon-cli "save-all"
+            echo "Starting deployment..."
+
+            mkdir -p "$APP_DIR" # done in terraform
+            cd "$APP_DIR"
+
+            # clone repo if it doesn't exist
+            if [ ! -d ".git" ]; then
+              echo "Cloning repository..."
+              git clone "$REPO" .
+            fi
+
+            echo "Updating repository..."
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            if docker compose ps --services --filter "status=running" | grep -q "fabric-server"; then
+              echo "Notifying players..."
+              docker compose exec -T fabric-server rcon-cli "say §cSystem update initiated..."
+              docker compose exec -T fabric-server rcon-cli "save-all"
               sleep 5
             fi
 
+            echo "Generating runtime environment..."
             cat .env.secrets > .env
             cat <<EOF >> .env
             TS_IP=$(tailscale ip -4)
@@ -64,14 +84,21 @@ jobs:
 
             chmod 600 .env
 
+            echo "Pulling container images..."
             docker compose pull
+            echo "Updating containers... "
             docker compose up -d --remove-orphans
+            echo "Cleaning up unused images... "
             docker system prune -f
 
+            # post deploy notification
             sleep 10
-            if docker compose ps --services --filter "status=running" | grep -q "minecraft-service"; then
-              docker compose exec -T minecraft-service rcon-cli "title @a clear" || true
-              docker compose exec -T minecraft-service rcon-cli "playsound entity.player.levelup master @a" || true
-              docker compose exec -T minecraft-service rcon-cli "say §aDeployment complete! Server is stable." || true
-              docker compose exec -T minecraft-service rcon-cli "title @a actionbar {\"text\":\"§aSystem Update Complete\", \"bold\":true}" || true
+            if docker compose ps --services --filter "status=running" | grep -q "$SERVICE"; then
+              docker compose exec -T "$SERVICE" rcon-cli "title @a clear" || true
+              docker compose exec -T "$SERVICE" rcon-cli "playsound entity.player.levelup master @a" || true
+              docker compose exec -T "$SERVICE" rcon-cli "say §aDeployment complete! Server is stable." || true
+              docker compose exec -T "$SERVICE" rcon-cli \
+                "title @a actionbar {\"text\":\"§aSystem Update Complete\", \"bold\":true}" || true
             fi
+
+            echo "Deployment finished successfully."
