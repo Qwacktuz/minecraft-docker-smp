@@ -29,16 +29,6 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags: tag:ci
 
-      - name: Copy App Files
-        uses: appleboy/scp-action@v1
-        with:
-          # host: ${{ needs.infra.outputs.server_ip }}
-          host: ${{ vars.TS_HOST }}
-          username: ${{ vars.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "./*,!infra,!.git,!.github"
-          target: "/home/${{ vars.USERNAME }}/app"
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
