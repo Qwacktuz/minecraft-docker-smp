@@ -5,6 +5,7 @@ sync-secrets.sh
 # Environment variables
 .env
 .env.local
+.env.secrets
 .secrets
 .vars
 
