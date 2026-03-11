@@ -64,7 +64,6 @@ services:
         c2me-fabric
         entityculling
 
-        vmp-fabric
         packet-fixer
         alternate-current
         chunky
