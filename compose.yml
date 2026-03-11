@@ -50,51 +50,44 @@ services:
       MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: BETA
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
       MODRINTH_PROJECTS: |
+
         fabric-api
         fabric-language-kotlin
         fabricexporter
+        fabric-permissions-api
+
         spark
-        krypton
         ferrite-core
+        krypton
         lithium
         scalablelux
         c2me-fabric
         entityculling
-        clumps
+
+        vmp-fabric
+        packet-fixer
         alternate-current
+        chunky
+        clumps
+        noisiumforked
         servercore
         no-chat-reports
         view-distance-fix
-        chunky
+        servux
+        tabtps
+
+        luckperms
         vanish
         bluemap
         carpet
-        servux
+        # worldedit
+        # axiom
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
-        luckperms
-        fabric-permissions-api
-        tabtps
         appleskin
         netherportalfix
         balm # netherportalfix dep
-        emotecraft
-        player-animation-library # emotecraft dep
-        # worldedit
-        # axiom
-        # carpet
-        # packet-fixer
-        # luckperms
-        # yungs-better-nether-fortresses
-        # yungs-better-ocean-monuments
-        # yungs-better-dungeons
-        # yungs-better-mineshafts
-        # yungs-better-jungle-temples
-        # yungs-better-end-island
-        # yungs-better-strongholds
-        # yungs-better-whitch-huts
-        # yungs-bridges
-        # yungs-extras
+
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
     volumes:
