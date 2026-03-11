@@ -66,6 +66,8 @@ services:
         no-chat-reports
         view-distance-fix
         chunky
+        chunkyborder
+        vanish
         bluemap
         carpet
         servux
