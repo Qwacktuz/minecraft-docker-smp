@@ -15,7 +15,7 @@ jobs:
     environment: mc-prod
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # - name: Debug environment variables
       #   run: |
