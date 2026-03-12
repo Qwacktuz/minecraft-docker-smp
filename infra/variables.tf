@@ -1,4 +1,4 @@
-# Deployment
+# Deployment secrets
 variable "hcloud_token" {
   description = "Hetzner Cloud API Token"
   type        = string
@@ -17,6 +17,7 @@ variable "ts_oauth_client_secret" {
   sensitive   = true
 }
 
+# Server variables
 variable "ts_tailnet" {
   description = "Tailscale tailnet name (e.g. 'user.github')"
   type        = string
@@ -62,17 +63,6 @@ variable "server_location" {
   type        = string
   default     = "hel1"
 }
-
-# Server secrets
-variable "rcon_password" { sensitive = true }
-variable "grafana_password" { sensitive = true }
-variable "mc_ops" { default = "" }
-variable "mc_whitelist" { default = "" }
-variable "r2_bucket_name" { sensitive = true }
-variable "r2_access_key_id" { sensitive = true }
-variable "r2_secret_access_key" { sensitive = true }
-variable "r2_endpoint" { sensitive = true }
-variable "restic_password" { sensitive = true }
 
 # Tofu is able to upload secrets
 variable "ssh_private_key_path" {

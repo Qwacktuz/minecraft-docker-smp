@@ -15,8 +15,9 @@ packages:
   - vim
   - unzip
   - ufw
-  - fastfetch # we <3 bloat
+  - fastfetch
   - fail2ban
+  - age
 
 write_files:
   - path: /etc/sysctl.d/99-tailscale.conf
@@ -31,13 +32,20 @@ write_files:
 
 runcmd:
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
+
+  # Install tailscale
   - sysctl -p /etc/sysctl.d/99-tailscale.conf
   - curl -fsSL https://tailscale.com/install.sh | sh
   - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
 
+  # Install docker
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
   - usermod -aG docker ${username}
+
+  # Install sops
+  - curl -Lo /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+  - chmod +x /usr/local/bin/sops
 
   # Ensure UFW is installed (Debian 13 might have minimal base)
   - apt-get update

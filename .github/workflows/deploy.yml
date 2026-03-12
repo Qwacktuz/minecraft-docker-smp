@@ -7,6 +7,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  terraform:
+    name: OpenTofu Infrastructure
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+      TF_VAR_ts_oauth_client_id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TF_VAR_ts_oauth_client_secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+      TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+
+      - name: OpenTofu Init & Apply
+        run: |
+          tofu init
+          tofu apply -auto-approve
+
   # -- Application (Docker Compose) ---
   deploy:
     name: Deploy Application
@@ -17,11 +37,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      # - name: Debug environment variables
-      #   run: |
-      #     if [ -z "${{ secrets.TS_OAUTH_CLIENT_ID }}" ]; then echo "CLIENT ID missing"; fi
-      #     if [ -z "${{ secrets.TS_OAUTH_CLIENT_SECRET }}" ]; then echo "SECRET missing"; fi
-
       - name: Authenticate with Tailscale
         uses: tailscale/github-action@v4
         with:
@@ -31,10 +46,13 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         with:
           host: ${{ vars.TS_HOST }}
           username: ${{ vars.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: SOPS_AGE_KEY
           script: |
             APP_DIR="$HOME/app"
             REPO="https://github.com/Qwacktuz/minecraft-smp.git"
@@ -57,12 +75,16 @@ jobs:
             git reset --hard "origin/$BRANCH"
 
             echo "Generating runtime environment..."
+            echo "$SOPS_AGE_KEY" > /tmp/age.key
+            export SOPS_AGE_KEY_FILE=/tmp/age.key
+            sops --decrypt secrets.enc.env > .env
+            rm /tmp/age.key
+
+
+            echo "Add runtime variables..."
             cat .env.secrets > .env
             cat <<EOF >> .env
             TS_IP=$(tailscale ip -4)
-            DOCKER_UID=$(id -u)
-            DOCKER_GID=$(id -g)
-            USERNAME=$(whoami)
             EOF
 
             chmod 600 .env
