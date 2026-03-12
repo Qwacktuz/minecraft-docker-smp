@@ -20,6 +20,9 @@ jobs:
       TF_VAR_ts_oauth_client_secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
       TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
 
+      TF_VAR_ts_tailnet: ${{ vars.TS_TAILNET }}
+      TF_VAR_username: ${{ vars.USERNAME }}
+
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
     steps:

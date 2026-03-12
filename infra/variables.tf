@@ -22,6 +22,7 @@ variable "ts_oauth_client_secret" {
 variable "ts_tailnet" {
   description = "Tailscale tailnet name (e.g. 'user.github')"
   type        = string
+  default     = "qwacktuz.github"
 }
 
 variable "ssh_public_key" {
