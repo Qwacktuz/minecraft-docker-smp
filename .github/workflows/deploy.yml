@@ -83,7 +83,15 @@ jobs:
             echo "$SOPS_AGE_KEY" > age.key
             chmod 600 age.key
             export SOPS_AGE_KEY_FILE=$(pwd)/age.key
-            sops --decrypt secrets/secrets.enc.env > .env
+
+            /usr/local/bin/sops --decrypt --output-type dotenv secrets/secrets.enc.env > .env
+
+            # Check if the file is empty
+            if [ ! -s .env ]; then
+              echo "ERROR: .env file is empty after decryption!"
+              exit 1
+            fi
+
             rm age.key
 
             echo "Add runtime variables..."
