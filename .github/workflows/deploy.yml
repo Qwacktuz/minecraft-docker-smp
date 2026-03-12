@@ -11,6 +11,9 @@ jobs:
   terraform:
     name: OpenTofu Infrastructure
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
     env:
       TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
       TF_VAR_ts_oauth_client_id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
