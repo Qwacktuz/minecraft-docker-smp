@@ -5,19 +5,20 @@ A high-performance, automated, and secure Minecraft server stack (Fabric) deploy
 ## 🛠 Features
 
 - **Infrastructure**: Managed with **OpenTofu** (Hetzner + Tailscale OAuth).
-- **Security**: **Tailscale-only SSH**, no public port 22. **UFW** host firewall.
-- **Observability**: **Grafana**, **Prometheus**, **Loki**, and **Alloy** (vvia `compose.yml`).
-- **Backups**: Automated **Restic** backups to Cloudflare R2 (S3-compatible).
-- **CI/CD**: Fully automated **GitHub Actions** deployment over the Tailscale network.
+- **Security**: **Tailscale-only SSH** (HCloud restricted to runner IP). **UFW** host firewall. **SOPS** + **Age** for secret management.
+- **Observability**: **Grafana**, **Prometheus**, **Loki**, **Alloy** (Telemetry Pipeline), and **Portainer** (via `compose.yml`).
+- **Backups**: Automated **Restic** backups to Cloudflare R2 (S3-compatible) every hour.
+- **CI/CD**: Fully automated **GitHub Actions** deployment over the Tailscale network with RCON-based status notifications.
 
 ## 🚀 Deployment Workflow
 
 1. **OpenTofu**: Provisions the server and bootstraps Docker/Tailscale (`infra/` directory).
 2. **GitHub Actions**:
     - Connects to the Tailscale network as `tag:ci`.
-    - Copies the application files to the server.
-    - Restarts the Docker Compose stack over the private network.
-3. **Secrets**: OpenTofu uploads `.env.secrets`, and GitHub Actions merges them with host-specific variables into a final `.env` file.
+    - Merges secrets using **SOPS** and **Age**.
+    - Pulls latest images and restarts the Docker Compose stack over the private network.
+    - Sends RCON notifications to the server during the deployment process.
+3. **Secrets**: Decrypted at runtime on the host via SOPS and injected into the `.env` file.
 
 ## 💾 Commands
 
