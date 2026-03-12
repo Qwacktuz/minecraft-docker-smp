@@ -102,6 +102,16 @@ jobs:
 
             chmod 600 .env
 
+            echo "--- Environment Check ---"
+            # This confirms the file exists and has content without leaking secrets
+            if [ -f .env ]; then
+                echo ".env file created successfully ($(wc -l < .env) lines)"
+            else
+                echo "ERROR: .env file was not created!"
+                exit 1
+            fi
+
+
             if docker compose ps --services --filter "status=running" | grep -q "fabric-server"; then
               echo "Notifying players..."
               docker compose exec -T fabric-server rcon-cli "say §cSystem update initiated..."
