@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - refactor/sops
   workflow_dispatch:
 
 jobs:
