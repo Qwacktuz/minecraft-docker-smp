@@ -1,4 +1,5 @@
 # Deployment secrets
+# TODO: depricate enterly from tterraform 
 variable "hcloud_token" {
   description = "Hetzner Cloud API Token"
   type        = string
@@ -21,12 +22,6 @@ variable "ts_oauth_client_secret" {
 variable "ts_tailnet" {
   description = "Tailscale tailnet name (e.g. 'user.github')"
   type        = string
-}
-
-variable "github_repo_url" {
-  description = "HTTPS URL of git repo"
-  type        = string
-  default     = "https://github.com/qwacktuz/infra-minecraft"
 }
 
 variable "ssh_public_key" {
@@ -64,15 +59,3 @@ variable "server_location" {
   default     = "hel1"
 }
 
-# Tofu is able to upload secrets
-variable "ssh_private_key_path" {
-  description = "Private deploy key"
-  type        = string
-  default     = "~/.ssh/mc-prod_id_ed25519"
-}
-
-variable "allowed_ssh_ips" {
-  description = "Additional CIDRs allowed to SSH"
-  type        = list(string)
-  default     = []
-}

@@ -62,12 +62,12 @@ resource "hcloud_firewall" "minecraft_fw" {
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
-  # Enable SSH: Restricted to runner + allowed IPs
+  # Enable SSH: Restricted to runner 
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "22"
-    source_ips = distinct(concat(["${chomp(data.http.runner_ip.response_body)}/32"], var.allowed_ssh_ips))
+    source_ips = ["${chomp(data.http.runner_ip.response_body)}/32"]
   }
 }
 
