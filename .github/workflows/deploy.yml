@@ -95,7 +95,6 @@ jobs:
             rm age.key
 
             echo "Add runtime variables..."
-            cat .env.secrets > .env
             cat <<EOF >> .env
             TS_IP=$(tailscale ip -4)
             EOF
