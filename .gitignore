@@ -3,11 +3,13 @@
 sync-secrets.sh
 
 # Environment variables
+*key*.txt
 .env
 .env.local
 .env.secrets
 .secrets
 .vars
+.direnv/
 
 # Terraform
 .terraform/
