@@ -83,7 +83,7 @@ jobs:
             echo "$SOPS_AGE_KEY" > age.key
             chmod 600 age.key
             export SOPS_AGE_KEY_FILE=$(pwd)/age.key
-            sops --decrypt secrets.enc.env > .env
+            sops --decrypt secrets/secrets.enc.env > .env
             rm /tmp/age.key
 
 
