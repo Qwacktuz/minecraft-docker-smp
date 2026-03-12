@@ -57,6 +57,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: SOPS_AGE_KEY
           script: |
+            set -e
+
             APP_DIR="$HOME/app"
             REPO="https://github.com/Qwacktuz/minecraft-smp.git"
             BRANCH="main"
