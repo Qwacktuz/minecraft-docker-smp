@@ -26,6 +26,7 @@ override.tf.json
 .terraform.tfstate.lock.info
 .terraformrc
 terraform.rc
+backend.conf
 
 # Logs
 *.log
