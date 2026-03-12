@@ -84,8 +84,7 @@ jobs:
             chmod 600 age.key
             export SOPS_AGE_KEY_FILE=$(pwd)/age.key
             sops --decrypt secrets/secrets.enc.env > .env
-            rm /tmp/age.key
-
+            rm age.key
 
             echo "Add runtime variables..."
             cat .env.secrets > .env
