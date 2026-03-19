@@ -67,7 +67,7 @@ services:
         alternate-current
         chunky
         clumps
-        noisiumforked
+        zfastnoise
         servercore
         no-chat-reports
         view-distance-fix
@@ -75,6 +75,7 @@ services:
         tabtps
         tt20
         achievements-optimizer
+        architectury-api
 
         luckperms
         vanish
