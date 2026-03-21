@@ -73,7 +73,7 @@ services:
         view-distance-fix
         servux
         tabtps
-        tt20
+        # tt20
         # achievements-optimizer
         # architectury-api
 
