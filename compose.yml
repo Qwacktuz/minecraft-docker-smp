@@ -91,16 +91,27 @@ services:
 
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
+        carpet setDefault maxFakePlayers 3
+        lp group default permission set tabtps.tps true
+        lp group default permission set tabtps.ping true
+        lp group default permission set tabtps.defaultdisplay true
+        lp group default permission set tabtps.toggle true
+        lp group default permission set tabtps.toggle.tab true
+        lp group default permission set tabtps.toggle.actionbar true
+        lp group default permission set tabtps.toggle.bossbar true
+        lp creategroup carpet_trusted
+        lp group carpet_trusted permission set carpet.commands.player true
+        lp group carpet_trusted parent add default
     volumes:
       - ./static/icon.png:/icon.png
       - ./data/minecraft:/data
 
-      # Luckperms config
-      - ./mc/luckperms/luckperms.conf:/data/config/luckperms/luckperms.conf:ro
-      - ./mc/luckperms/groups:/data/config/luckperms/yaml-storage/groups:ro
-
-      # Carpet config
-      - ./mc/carpet.conf:/data/config/carpet.conf:ro
+      # TODO: add declarative mc mod configs
+      # # Luckperms config
+      # - ./mc/luckperms/luckperms.conf:/data/config/luckperms/luckperms.conf:ro
+      # - ./mc/luckperms/groups:/data/config/luckperms/yaml-storage/groups
+      # # Carpet config
+      # - ./mc/carpet.conf:/data/config/carpet.conf:ro
     healthcheck:
       test: ["CMD", "mc-health"]
       interval: 1m
