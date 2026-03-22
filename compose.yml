@@ -96,7 +96,7 @@ services:
       - ./data/minecraft:/data
 
       # Luckperms config
-      - ./mc/luckperms/luckperms.conf:/data/config/luckperms/luckperms.conf:ro
+      - ./mc/luckperms/config.yml:/data/config/luckperms/luckperms.conf:ro
       - ./mc/luckperms/groups:/data/config/luckperms/yaml-storage/groups:ro
 
       # Carpet config
