@@ -91,6 +91,7 @@ services:
 
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
+        carpet commandPlayer true
         carpet setDefault maxFakePlayers 3
         lp group default permission set tabtps.tps true
         lp group default permission set tabtps.ping true
