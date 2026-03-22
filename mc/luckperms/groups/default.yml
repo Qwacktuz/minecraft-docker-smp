@@ -1,0 +1,16 @@
+name: default
+permissions:
+  - tabtps.tps:
+      value: true
+  - tabtps.ping:
+      value: true
+  - tabtps.defaultdisplay:
+      value: true
+  - tabtps.toggle:
+      value: true
+  - tabtps.toggle.tab:
+      value: true
+  - tabtps.toggle.actionbar:
+      value: true
+  - tabtps.toggle.bossbar:
+      value: true

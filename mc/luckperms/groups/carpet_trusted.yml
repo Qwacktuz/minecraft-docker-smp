@@ -1,0 +1,6 @@
+name: carpet_trusted
+parents:
+  - default
+permissions:
+  - carpet.commands.player:
+      value: true

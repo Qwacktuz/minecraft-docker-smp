@@ -94,6 +94,14 @@ services:
     volumes:
       - ./static/icon.png:/icon.png
       - ./data/minecraft:/data
+
+      # Luckperms config
+      - ./mc/luckperms.conf:/data/config/luckperms/luckperms.conf:ro
+      - ./mc/luckperms/groups/default.yml:/data/config/luckperms/yaml-storage/groups/default.yml:ro
+      - ./mc/luckperms/groups/carpet_trusted.yml:/data/config/luckperms/yaml-storage/groups/carpet_trusted.yml:ro
+
+      # Carpet config
+      - ./mc/carpet.conf:/data/config/carpet.conf:ro
     healthcheck:
       test: ["CMD", "mc-health"]
       interval: 1m
