@@ -73,8 +73,8 @@ services:
         view-distance-fix
         servux
         tabtps
-        achievements-optimizer
-        architectury-api
+        # achievements-optimizer
+        # architectury-api
         # tt20
 
         luckperms
