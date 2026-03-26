@@ -81,18 +81,20 @@ services:
         vanish
         bluemap
         carpet
+        carpet-tis-addition
         # worldedit
         # axiom
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
         appleskin
-        netherportalfix
         balm # netherportalfix dep
 
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
         carpet setDefault optimizedTNT true
         carpet setDefault maxFakePlayers 3
+        carpet optimizedTNTHighPriority true
+        carpet optimizedFastEntityMovement true
         carpet commandPlayer true
         lp group default permission set tabtps.tps true
         lp group default permission set tabtps.ping true
