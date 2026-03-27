@@ -41,10 +41,7 @@ services:
       USE_MEOWICE_FLAGS: true
       USE_MEOWICE_GRAALVM_FLAGS: true
       MEMORY: 5G
-      INIT_MEMORY: 5G
-      MAX_MEMORY: 5G
-      JVM_OPTS: "-XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders" # not in meowice yet
-      JVM_XX_OPTS: "-XX:+AlwaysPreTouch"
+      JVM_OPTS: "-XX:+UseCompactObjectHeaders" # not in meowice yet
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
