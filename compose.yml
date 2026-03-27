@@ -6,9 +6,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "25565:25565"
-      - "25565:25565/udp"
-      - "24454:24454/udp"
+      - "25565:25565/tcp"
+      - "24454:24454/udp" # simplevoicechat
       - "${TS_IP}:25585:25585" # fabricexporter
     environment:
       EULA: true
@@ -42,7 +41,10 @@ services:
       USE_MEOWICE_FLAGS: true
       USE_MEOWICE_GRAALVM_FLAGS: true
       MEMORY: 5G
+      INIT_MEMORY: 5G
+      MAX_MEMORY: 5G
       JVM_OPTS: "-XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders" # not in meowice yet
+      JVM_XX_OPTS: "-XX:+AlwaysPreTouch"
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
@@ -72,7 +74,8 @@ services:
         servux
         tabtps
         achievements-optimizer
-        architectury-api
+        architectury-api # achievements-optimizer dependency
+        balm # soft dependency
 
         luckperms
         vanish
@@ -85,26 +88,14 @@ services:
         #plasmo-voice # TODO: migrate from svc
         appleskin
 
-      RCON_CMDS_STARTUP: |-
-        gamerule players_sleeping_percentage 0
-        carpet setDefault optimizedTNT true
-        carpet setDefault maxFakePlayers 3
-        carpet optimizedTNTHighPriority true
-        carpet optimizedFastEntityMovement true
-        carpet commandPlayer true
-        lp group default permission set tabtps.tps true
-        lp group default permission set tabtps.ping true
-        lp group default permission set tabtps.defaultdisplay true
-        lp group default permission set tabtps.toggle true
-        lp group default permission set tabtps.toggle.tab true
-        lp group default permission set tabtps.toggle.actionbar true
-        lp group default permission set tabtps.toggle.bossbar true
-        lp creategroup carpet_trusted
-        lp group carpet_trusted permission set carpet.commands.player true
-        lp group carpet_trusted parent add default
+      RCON_CMDS_STARTUP: |
+        function init
     volumes:
       - ./static/icon.png:/icon.png
       - ./data/minecraft:/data
+
+      # FIXME: Hacky bootstrap (because I am lazy)
+      - ./mc/bootstrap:/data/functions
 
       # TODO: add declarative mc mod configs
       # # Luckperms config
@@ -114,10 +105,10 @@ services:
       # - ./mc/carpet.conf:/data/config/carpet.conf:ro
     healthcheck:
       test: ["CMD", "mc-health"]
-      interval: 1m
+      interval: 30s
       timeout: 20s
-      retries: 15
-      start_period: 2m
+      retries: 10
+      start_period: 3m
     deploy:
       resources:
         limits:
@@ -139,6 +130,7 @@ services:
       BACKUP_INTERVAL: 1h
       RCON_HOST: minecraft-service
       RCON_PASSWORD: "${RCON_PASSWORD}"
+      PAUSE_IF_NO_PLAYERS: true
 
       # Compression & Size Savings (exclude bluemap)
       EXCLUDES: "bluemap,logs,cache,emotes,*.tmp,web,*.map"
@@ -190,6 +182,7 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--web.enable-remote-write-receiver"
+      - "--storage.tsdb.retention.time=15d"
     ports:
       - "${TS_IP}:9090:9090"
     volumes:
@@ -235,9 +228,10 @@ services:
         "/etc/alloy/config.alloy",
       ]
     volumes:
+      # Mount config
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      # Mount the rootless socket & logs
-      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Mount logs
       - alloy_data:/var/lib/alloy/data
 
       # Mount to interal host/ to not mess with container's own system metrics
@@ -253,22 +247,22 @@ services:
         aliases:
           - alloy
 
-  portainer:
-    image: portainer/portainer-ce:latest
-    container_name: portainer
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    ports:
-      - "${TS_IP}:9000:9000"
-    volumes:
-      # Map the docker socket
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    networks:
-      minecraft-network:
-        aliases:
-          - portainer
+  # portainer:
+  #   image: portainer/portainer-ce:latest
+  #   container_name: portainer
+  #   restart: unless-stopped
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   ports:
+  #     - "${TS_IP}:9000:9000"
+  #   volumes:
+  #     # Map the docker socket
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - portainer_data:/data
+  #   networks:
+  #     minecraft-network:
+  #       aliases:
+  #         - portainer
 
 networks:
   minecraft-network:
@@ -280,4 +274,4 @@ volumes:
   prometheus_data:
   loki_data:
   alloy_data:
-  portainer_data:
+  # portainer_data:
