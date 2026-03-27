@@ -14,10 +14,10 @@ A high-performance, automated, and secure Minecraft server stack (Fabric) deploy
 
 1. **OpenTofu**: Provisions the server and bootstraps Docker/Tailscale (`infra/` directory).
 2. **GitHub Actions**:
-    - Connects to the Tailscale network as `tag:ci`.
-    - Merges secrets using **SOPS** and **Age**.
-    - Pulls latest images and restarts the Docker Compose stack over the private network.
-    - Sends RCON notifications to the server during the deployment process.
+   - Connects to the Tailscale network as `tag:ci`.
+   - Merges secrets using **SOPS** and **Age**.
+   - Pulls latest images and restarts the Docker Compose stack over the private network.
+   - Sends RCON notifications to the server during the deployment process.
 3. **Secrets**: Decrypted at runtime on the host via SOPS and injected into the `.env` file.
 
 ## 💾 Commands

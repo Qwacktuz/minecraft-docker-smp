@@ -6,16 +6,16 @@ This directory contains the OpenTofu (Terraform) configuration to provision the 
 
 1. **Hetzner Cloud**: Provisions a VPS (default `cx33`) in `hel1` running **Debian 13 (Trixie)**.
 2. **Networking**:
-    - Public IPv4/v6 enabled.
-    - **Hetzner Firewall**: Blocks all public traffic except Minecraft (25565), Voice Chat (24454), and ephemeral ports. **SSH (22) is restricted to the CI runner's IP.**
+   - Public IPv4/v6 enabled.
+   - **Hetzner Firewall**: Blocks all public traffic except Minecraft (25565), Voice Chat (24454), and ephemeral ports. **SSH (22) is restricted to the CI runner's IP.**
 3. **Tailscale**:
-    - Automated join via `tailscale/tailscale` provider using ephemeral Auth Keys.
-    - Server joins with `tag:server` and hostname `mc-prod`.
-    - SSH is managed over the Tailscale tunnel (via `tailscale0` in UFW).
+   - Automated join via `tailscale/tailscale` provider using ephemeral Auth Keys.
+   - Server joins with `tag:server` and hostname `mc-prod`.
+   - SSH is managed over the Tailscale tunnel (via `tailscale0` in UFW).
 4. **Bootstrap (Cloud-init)**:
-    - Creates a `deployer` user.
-    - Installs Docker, SOPS, Age, UFW, Fail2ban.
-    - Configures SSH hardening and Host Firewall.
+   - Creates a `deployer` user.
+   - Installs Docker, SOPS, Age, UFW, Fail2ban.
+   - Configures SSH hardening and Host Firewall.
 
 ## Prerequisites
 

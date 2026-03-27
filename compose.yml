@@ -82,7 +82,6 @@ services:
         bluemap
         carpet
         carpet-tis-addition
-        # worldedit
         # axiom
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
