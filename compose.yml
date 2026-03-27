@@ -73,7 +73,6 @@ services:
         tabtps
         achievements-optimizer
         architectury-api
-        # tt20
 
         luckperms
         vanish
@@ -85,7 +84,6 @@ services:
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
         appleskin
-        balm # netherportalfix dep
 
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
