@@ -88,14 +88,34 @@ services:
         #plasmo-voice # TODO: migrate from svc
         appleskin
 
-      RCON_CMDS_STARTUP: |
-        function init
+      RCON_CMDS_STARTUP: |-
+        gamerule players_sleeping_percentage 0
+
+        # Carpet
+        carpet setDefault optimizedTNT true
+        carpet optimizedTNTHighPriority true
+        carpet optimizedFastEntityMovement true
+        carpet commandPlayer true
+
+        # Manual LuckPerms one-off commands (should've used nix ;-;)
+        #lp group default permission set tabtps.tps true
+        #lp group default permission set tabtps.ping true
+        #lp group default permission set tabtps.defaultdisplay true
+        #lp group default permission set tabtps.toggle true
+        #lp group default permission set tabtps.toggle.tab true
+        #lp group default permission set tabtps.toggle.actionbar true
+        #lp group default permission set tabtps.toggle.bossbar true
+
+        #lp creategroup carpet_trusted
+        #lp group carpet_trusted permission set carpet.commands.player true
+        #lp group carpet_trusted parent add default
+
     volumes:
       - ./static/icon.png:/icon.png
       - ./data/minecraft:/data
 
       # FIXME: Hacky bootstrap (because I am lazy)
-      - ./mc/bootstrap:/data/functions
+      # - ./mc/bootstrap:/data/functions
 
       # TODO: add declarative mc mod configs
       # # Luckperms config
