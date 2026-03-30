@@ -62,7 +62,7 @@ services:
         c2me-fabric
 
         entityculling
-        immersive-optimization
+        servercore
 
         packet-fixer
         alternate-current
