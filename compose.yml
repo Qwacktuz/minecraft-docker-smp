@@ -61,6 +61,9 @@ services:
         scalablelux
         c2me-fabric
 
+        entityculling
+        immersive-optimization
+
         packet-fixer
         alternate-current
         chunky
