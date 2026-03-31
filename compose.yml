@@ -54,20 +54,21 @@ services:
         fabricexporter
         fabric-permissions-api
 
-        #spark
-        #ferrite-core
-        #krypton
-        #lithium
-        #scalablelux
-        #c2me-fabric
+        spark
+        ferrite-core
+        krypton
+        lithium
+        scalablelux
+        c2me-fabric
 
         #entityculling
         #servercore
 
         #packet-fixer
-        #alternate-current
-        #chunky
+        alternate-current
+        chunky
         clumps
+        get-it-together-drops
         #zfastnoise
         no-chat-reports
         #view-distance-fix
@@ -89,9 +90,9 @@ services:
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
         carpet setDefault optimizedTNT true
-        carpet optimizedTNTHighPriority true
-        carpet optimizedFastEntityMovement true
-        carpet commandPlayer true
+        carpet setDefault optimizedTNTHighPriority true
+        carpet setDefault optimizedFastEntityMovement true
+        carpet setDefault commandPlayer true
 
       # Manual LuckPerms one-off commands (should've used nix ;-;)
       #lp group default permission set tabtps.tps true
