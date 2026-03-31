@@ -79,7 +79,7 @@ services:
 
         luckperms
         vanish
-        bluemap
+        #bluemap
         carpet
         carpet-tis-addition
         # axiom
