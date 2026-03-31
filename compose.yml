@@ -69,18 +69,17 @@ services:
         #chunky
         clumps
         #zfastnoise
-        #no-chat-reports
+        no-chat-reports
         #view-distance-fix
         #servux
-        #tabtps
         #achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
 
         luckperms
-        #vanish
+        vanish
         #bluemap
-        #carpet
+        carpet
         carpet-tis-addition
         # axiom
         simple-voice-chat
