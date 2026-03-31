@@ -71,7 +71,7 @@ services:
         #zfastnoise
         no-chat-reports
         #view-distance-fix
-        #servux
+        servux
         #achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
