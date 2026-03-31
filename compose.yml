@@ -64,7 +64,7 @@ services:
         entityculling
         servercore
 
-        #packet-fixer
+        packet-fixer
         alternate-current
         chunky
         clumps
