@@ -54,33 +54,33 @@ services:
         fabricexporter
         fabric-permissions-api
 
-        spark
-        ferrite-core
-        krypton
-        lithium
-        scalablelux
-        c2me-fabric
+        #spark
+        #ferrite-core
+        #krypton
+        #lithium
+        #scalablelux
+        #c2me-fabric
 
-        entityculling
-        servercore
+        #entityculling
+        #servercore
 
-        packet-fixer
-        alternate-current
-        chunky
+        #packet-fixer
+        #alternate-current
+        #chunky
         clumps
-        zfastnoise
-        no-chat-reports
-        view-distance-fix
-        servux
-        tabtps
-        achievements-optimizer
+        #zfastnoise
+        #no-chat-reports
+        #view-distance-fix
+        #servux
+        #tabtps
+        #achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
 
         luckperms
-        vanish
-        bluemap
-        carpet
+        #vanish
+        #bluemap
+        #carpet
         carpet-tis-addition
         # axiom
         simple-voice-chat
