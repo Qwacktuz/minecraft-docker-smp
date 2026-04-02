@@ -73,7 +73,7 @@ services:
         no-chat-reports
         #view-distance-fix
         servux
-        #achievements-optimizer
+        achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
 
