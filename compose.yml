@@ -64,8 +64,8 @@ services:
         #entityculling
         servercore
 
-        #packet-fixer
-        #alternate-current
+        packet-fixer
+        alternate-current
         #chunky
         clumps
         get-it-together-drops
