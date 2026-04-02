@@ -66,7 +66,7 @@ services:
 
         packet-fixer
         alternate-current
-        #chunky
+        chunky
         clumps
         get-it-together-drops
         zfastnoise
