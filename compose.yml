@@ -69,7 +69,7 @@ services:
         #chunky
         clumps
         get-it-together-drops
-        #zfastnoise
+        zfastnoise
         no-chat-reports
         #view-distance-fix
         servux
