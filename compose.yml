@@ -64,16 +64,16 @@ services:
         entityculling
         servercore
 
-        packet-fixer
+        #packet-fixer
         alternate-current
         chunky
         clumps
         get-it-together-drops
-        zfastnoise
+        #zfastnoise
         no-chat-reports
         view-distance-fix
         servux
-        achievements-optimizer
+        #achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
 
