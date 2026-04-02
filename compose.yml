@@ -78,7 +78,7 @@ services:
         balm # soft dependency
 
         luckperms
-        #vanish
+        vanish
         #bluemap
         carpet
         carpet-tis-addition
