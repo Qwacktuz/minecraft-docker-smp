@@ -71,7 +71,7 @@ services:
         get-it-together-drops
         zfastnoise
         no-chat-reports
-        #view-distance-fix
+        view-distance-fix
         servux
         achievements-optimizer
         architectury-api # achievements-optimizer dependency
