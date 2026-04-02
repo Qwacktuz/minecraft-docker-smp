@@ -62,7 +62,7 @@ services:
         c2me-fabric
 
         entityculling
-        #servercore
+        servercore
 
         packet-fixer
         alternate-current
