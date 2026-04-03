@@ -61,7 +61,7 @@ services:
         scalablelux
         c2me-fabric
 
-        #entityculling
+        
         servercore
 
         packet-fixer
