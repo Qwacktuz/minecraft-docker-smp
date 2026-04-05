@@ -1,6 +1,6 @@
 services:
   minecraft-service:
-    image: itzg/minecraft-server:java25-graalvm
+    image: itzg/minecraft-server:java25-alpine
     container_name: fabric-server
     restart: unless-stopped
     security_opt:
