@@ -39,7 +39,6 @@ services:
       RCON_PASSWORD: ${RCON_PASSWORD}
 
       USE_MEOWICE_FLAGS: true
-      USE_MEOWICE_GRAALVM_FLAGS: true
       MEMORY: 5G
       JVM_OPTS: "-XX:+UseCompactObjectHeaders" # not in meowice yet
 
@@ -61,7 +60,7 @@ services:
         scalablelux
         c2me-fabric
 
-        
+
         servercore
 
         packet-fixer
