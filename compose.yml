@@ -47,6 +47,7 @@ services:
       MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: ALPHA
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
       MODRINTH_PROJECTS: |
+        datapack:armor-stand-arms
 
         fabric-api
         fabric-language-kotlin
