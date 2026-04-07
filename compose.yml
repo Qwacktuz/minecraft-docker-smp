@@ -60,9 +60,8 @@ services:
         scalablelux
         c2me-fabric
 
-
+        luckperms
         servercore
-
         packet-fixer
         alternate-current
         chunky
@@ -75,16 +74,16 @@ services:
         achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
-
-        luckperms
-        vanish
-        #bluemap
         carpet
         carpet-tis-addition
-        # axiom
+
+        #bluemap
+        #axiom
+        vanish
         simple-voice-chat
         #plasmo-voice # TODO: migrate from svc
         appleskin
+        armor-stands
 
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
