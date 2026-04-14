@@ -48,6 +48,7 @@ services:
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
       MODRINTH_PROJECTS: |
         datapack:armor-stand-arms
+        datapack:skull-portable
 
         fabric-api
         fabric-language-kotlin
@@ -76,7 +77,6 @@ services:
         balm # soft dependency
         carpet
         carpet-tis-addition
-        skull-portable
 
         #bluemap
         #axiom
