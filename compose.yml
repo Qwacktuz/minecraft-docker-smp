@@ -76,6 +76,7 @@ services:
         balm # soft dependency
         carpet
         carpet-tis-addition
+        skull-portable
 
         #bluemap
         #axiom
