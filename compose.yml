@@ -60,7 +60,7 @@ services:
         lithium
         scalablelux
         c2me-fabric
-
+        ai-improvements
         luckperms
         servercore
         packet-fixer
