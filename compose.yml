@@ -73,6 +73,7 @@ services:
         view-distance-fix
         servux
         achievements-optimizer
+        ai-improvements
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
         carpet
