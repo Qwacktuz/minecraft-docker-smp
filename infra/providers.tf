@@ -1,22 +1,22 @@
 terraform {
-  required_version = ">= 1.11.5"
+  required_version = ">= 1.12.1"
 
   required_providers {
     hcloud = {
       source  = "hetznercloud/hcloud"
-      version = "~> 1.60"
+      version = "~> 1.64"
     }
     tailscale = {
       source  = "tailscale/tailscale"
-      version = "~> 0.28"
+      version = "~> 0.29"
     }
     cloudinit = {
       source  = "hashicorp/cloudinit"
-      version = "~> 2.3"
+      version = "~> 2.4"
     }
     http = {
       source  = "hashicorp/http"
-      version = "~> 3.5"
+      version = "~> 3.6"
     }
   }
 }
