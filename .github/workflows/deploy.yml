@@ -42,7 +42,7 @@ jobs:
   # -- Application (Docker Compose) ---
   deploy:
     name: Deploy Application
-    # needs: infra # TODO: add opentofu infra job
+    needs: terraform
     runs-on: ubuntu-latest
     environment: mc-prod
     steps:

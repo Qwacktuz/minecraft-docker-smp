@@ -63,12 +63,12 @@ resource "hcloud_firewall" "minecraft_fw" {
   }
 
   # Enable SSH: Restricted to runner 
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "22"
-    source_ips = ["${chomp(data.http.runner_ip.response_body)}/32"]
-  }
+  # rule {
+  #   direction  = "in"
+  #   protocol   = "tcp"
+  #   port       = "22"
+  #   source_ips = ["${chomp(data.http.runner_ip.response_body)}/32"]
+  # }
 }
 
 resource "hcloud_server" "minecraft" {
