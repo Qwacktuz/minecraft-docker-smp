@@ -8,7 +8,7 @@ services:
     ports:
       - "25565:25565/tcp"
       - "24454:24454/udp" # simplevoicechat
-      - "${TS_IP}:25585:25585" # fabricexporter
+      - "${TS_IP}:25585:25585/tcp" # fabricexporter
     environment:
       EULA: true
       TYPE: FABRIC
