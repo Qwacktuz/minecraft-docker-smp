@@ -25,6 +25,25 @@ variable "ts_tailnet" {
   default     = "qwacktuz.github"
 }
 
+variable "cloudflare_zone_name" {
+  description = "Cloudflare zone, e.g. mydomain.com"
+  type        = string
+  default     = "cactuz.dev"
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with DNS Edit + R2 permissions"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "minecraft_subdomain" {
+  description = "DNS record name for the Minecraft server, e.g. mc"
+  type        = string
+  default     = "mc"
+}
+
 variable "ssh_public_key" {
   description = "Public SSH key for the deployer user"
   type        = string
