@@ -1,4 +1,7 @@
 data "cloudflare_zones" "domain" {
+  account = {
+    id = var.cloudflare_account_id
+  }
   name = var.cloudflare_zone_name
 }
 
