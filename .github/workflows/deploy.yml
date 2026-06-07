@@ -42,7 +42,7 @@ jobs:
   # -- Application (Docker Compose) ---
   deploy:
     name: Deploy Application
-    needs: terraform
+    needs: terraform # TODO: needs infra?
     runs-on: ubuntu-latest
     environment: mc-prod
     steps:
@@ -56,12 +56,18 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags: tag:ci
 
+      - name: Resolve Server Tailscale IP
+        run: |
+          TS_IP=$(tailscale ip -4 ${{ vars.TS_HOST }})
+          echo "Server Tailscale IP: $TS_IP"
+          echo "TS_IP=$TS_IP" >> $GITHUB_ENV
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         with:
-          host: ${{ vars.TS_HOST }}
+          host: ${{ env.TS_IP }}
           username: ${{ vars.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: SOPS_AGE_KEY

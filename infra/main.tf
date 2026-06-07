@@ -87,7 +87,7 @@ resource "hcloud_server" "minecraft" {
   }
 
   lifecycle {
-    prevent_destroy = true # Set to true when statble to prevent deleting state
+    prevent_destroy = false # Set to true when statble to prevent deleting state
     ignore_changes  = [user_data]
   }
 }
