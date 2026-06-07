@@ -120,10 +120,10 @@ services:
       # - ./mc/carpet.conf:/data/config/carpet.conf:ro
     healthcheck:
       test: ["CMD", "mc-health"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 3m
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
     deploy:
       resources:
         limits:
