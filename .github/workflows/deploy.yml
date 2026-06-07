@@ -58,6 +58,13 @@ jobs:
 
       - name: Resolve Server Tailscale IP
         run: |
+          echo "Waiting for ${{ vars.TS_HOST }} to register on Tailnet..."
+          timeout 300s bash -c '
+            until tailscale status | grep -q "${{ vars.TS_HOST }}"; do
+              echo "Server not found yet. Retrying in 10 seconds..."
+              sleep 10
+            done
+          '
           TS_IP=$(tailscale ip -4 ${{ vars.TS_HOST }})
           echo "Server Tailscale IP: $TS_IP"
           echo "TS_IP=$TS_IP" >> $GITHUB_ENV
