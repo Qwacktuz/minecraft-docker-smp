@@ -27,6 +27,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GODEBUG: netdns=go # ipv4 fix
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
