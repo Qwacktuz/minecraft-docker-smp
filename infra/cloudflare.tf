@@ -1,12 +1,12 @@
-data "cloudflare_zones" "domain" {
-  account = {
-    id = var.cloudflare_account_id
-  }
-  name = var.cloudflare_zone_name
-}
-
+# data "cloudflare_zones" "domain" {
+#   account = {
+#     id = var.cloudflare_account_id
+#   }
+#   name = var.cloudflare_zone_name
+# }
+#
 resource "cloudflare_dns_record" "minecraft_v4" {
-  zone_id = data.cloudflare_zones.domain.result[0].id
+  zone_id = var.cloudflare_zone_id
   name    = var.minecraft_subdomain
   type    = "A"
   content = hcloud_server.minecraft.ipv4_address
@@ -16,8 +16,8 @@ resource "cloudflare_dns_record" "minecraft_v4" {
 }
 
 resource "cloudflare_dns_record" "minecraft_v6" {
-  zone_id = data.cloudflare_zones.domain.result[0].id
-  name    = "mc"
+  zone_id = var.cloudflare_zone_id
+  name    = var.minecraft_subdomain
   content = hcloud_server.minecraft.ipv6_address
   type    = "AAAA"
   ttl     = 300

@@ -25,8 +25,15 @@ variable "ts_tailnet" {
   default     = "qwacktuz.github"
 }
 
-variable "cloudflare_account_id" {
-  description = "Cloudflare account ID"
+# variable "cloudflare_account_id" {
+#   description = "Cloudflare account ID"
+#   type        = string
+#   default     = null
+#   sensitive   = true
+# }
+
+variable "cloudflare_zone_id" {
+  description = "cloudflare zone id"
   type        = string
   default     = null
   sensitive   = true
