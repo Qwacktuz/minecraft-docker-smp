@@ -39,8 +39,7 @@ services:
       RCON_PASSWORD: ${RCON_PASSWORD}
 
       USE_MEOWICE_FLAGS: true
-      MEMORY: 5G
-      JVM_OPTS: "-XX:+UseCompactObjectHeaders" # not in meowice yet
+      MEMORY: 12G
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
