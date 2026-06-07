@@ -39,7 +39,7 @@ services:
       RCON_PASSWORD: ${RCON_PASSWORD}
 
       USE_MEOWICE_FLAGS: true
-      MEMORY: 12G
+      MEMORY: 10G
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
@@ -126,7 +126,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 12.5G
+          memory: 11.5G
     networks:
       minecraft-network:
         aliases:
