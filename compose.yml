@@ -66,6 +66,8 @@ services:
         chunky
         clumps
         get-it-together-drops
+        fast-item-frames
+        lmd
         zfastnoise
         no-chat-reports
         view-distance-fix
