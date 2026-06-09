@@ -53,6 +53,7 @@ services:
         fabricexporter
         fabric-permissions-api
 
+        withererd-foxy-jumpscare
         spark
         ferrite-core
         krypton
