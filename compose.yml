@@ -1,4 +1,113 @@
 services:
+  minecraft-creative:
+    image: itzg/minecraft-server:java25-alpine
+    container_name: fabric-server
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "24464:25565/tcp"
+    environment:
+      EULA: true
+      TYPE: FABRIC
+
+      VERSION: "1.21.11"
+      MOTD: "%TYPE% CREATIVE test server running §l§cMinecraft§r §n%VERSION%.\ Aka A §g§lminecraft§r §u-.-§r §5§mServer§r made by §a§kkaktus"
+      ICON: "/icon.png"
+      OVERRIDE_ICON: true
+      LEVEL: "world"
+      ONLINE_MODE: true
+
+      MAX_PLAYERS: "20"
+      DIFFICULTY: HARD
+      MODE: "CREATIVE"
+      PVP: "TRUE"
+
+      VIEW_DISTANCE: 12
+      SPAWN_PROTECTION: 0
+      SIMULATION_DISTANCE: 10
+
+      EXISTING_OPS_FILE: "SYNCHRONIZE"
+      OPS: "${MC_OPS}"
+      EXISTING_WHITELIST_FILE: "SYNCHRONIZE"
+      WHITELIST: "${MC_WHITELIST}"
+      ENFORCE_WHITELIST: true
+      ENABLE_WHITELIST: true
+
+      RCON_PASSWORD: ${RCON_PASSWORD}
+
+      USE_MEOWICE_FLAGS: true
+      MEMORY: 3.5G
+
+      REMOVE_OLD_MODS: true
+      VANILLATWEAKS_SHARECODE: SNoKz9
+      MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: ALPHA
+      MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
+      MODRINTH_PROJECTS: |
+        datapack:skull-portable
+
+        fabric-api
+        fabric-language-kotlin
+        fabricexporter
+        fabric-permissions-api
+
+        withererd-foxy-jumpscare
+        spark
+        ferrite-core
+        krypton
+        lithium
+        scalablelux
+        c2me-fabric
+        luckperms
+        servercore
+        packet-fixer
+        alternate-current
+        chunky
+        clumps
+        get-it-together-drops
+        lmd
+        zfastnoise
+        no-chat-reports
+        view-distance-fix
+        servux
+        achievements-optimizer
+        architectury-api # achievements-optimizer dependency
+        balm # soft dependency
+        carpet
+        carpet-tis-addition
+
+        #bluemap
+        #axiom
+        vanish
+        appleskin
+        armor-stands
+
+      RCON_CMDS_STARTUP: |-
+        gamerule players_sleeping_percentage 0
+        carpet setDefault optimizedTNT true
+        carpet setDefault optimizedTNTHighPriority true
+        carpet setDefault optimizedFastEntityMovement true
+        carpet setDefault commandPlayer true
+
+    volumes:
+      - ./static/icon.png:/icon.png
+      - ./data/minecraft-creative:/data
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    networks:
+      minecraft-network:
+        aliases:
+          - mc-creative
+
+  # Main SMP server
   minecraft-service:
     image: itzg/minecraft-server:java25-alpine
     container_name: fabric-server
