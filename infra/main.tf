@@ -44,6 +44,13 @@ resource "hcloud_firewall" "minecraft_fw" {
   rule {
     direction  = "in"
     protocol   = "tcp"
+    port       = "24464"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
     port       = "25565"
     source_ips = ["0.0.0.0/0", "::/0"]
   }

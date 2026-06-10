@@ -57,6 +57,7 @@ runcmd:
   - /usr/sbin/ufw default allow outgoing
 
   # Allow Game Traffic publicly
+  - /usr/sbin/ufw allow 24464/tcp comment 'Minecraft Test/Creative'
   - /usr/sbin/ufw allow 25565/tcp comment 'Minecraft'
   - /usr/sbin/ufw allow 25565/udp comment 'Minecraft'
   - /usr/sbin/ufw allow 24454/udp comment 'SimpleVoiceChat'
