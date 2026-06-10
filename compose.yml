@@ -1,7 +1,7 @@
 services:
   minecraft-creative:
     image: itzg/minecraft-server:java25-alpine
-    container_name: fabric-server
+    container_name: fabric-creative
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
