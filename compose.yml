@@ -1,5 +1,5 @@
 services:
-  minecraft-creative:
+  minecraft-test:
     image: itzg/minecraft-server:java25-alpine
     container_name: fabric-creative
     restart: unless-stopped
@@ -91,7 +91,7 @@ services:
 
     volumes:
       - ./static/icon.png:/icon.png
-      - ./data/minecraft-creative:/data
+      - ./data/minecraft-test:/data
     healthcheck:
       test: ["CMD", "mc-health"]
       interval: 20s
