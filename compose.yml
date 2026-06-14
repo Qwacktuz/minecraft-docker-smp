@@ -12,7 +12,7 @@ services:
       TYPE: FABRIC
 
       VERSION: "1.21.11"
-      MOTD: "%TYPE% CREATIVE test server running §l§cMinecraft§r §n%VERSION%.\ Aka A §g§lminecraft§r §u-.-§r §5§mServer§r made by §a§kkaktus"
+      MOTD: "%TYPE% test server running §l§cMinecraft§r §n%VERSION%"
       ICON: "/icon.png"
       OVERRIDE_ICON: true
       LEVEL: "world"
@@ -20,7 +20,7 @@ services:
 
       MAX_PLAYERS: "20"
       DIFFICULTY: HARD
-      MODE: "CREATIVE"
+      MODE: "SURVIVAL"
       PVP: "TRUE"
 
       VIEW_DISTANCE: 12
