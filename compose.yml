@@ -52,32 +52,33 @@ services:
         #fabric-permissions-api
 
         spark
-        ferrite-core
         #krypton
+        ferrite-core
         lithium
         scalablelux
         c2me-fabric
-        luckperms
         servercore
-        packet-fixer
         alternate-current
-        #chunky
         clumps
-        #get-it-together-drops
+        get-it-together-drops
         lmd
         zfastnoise
-        no-chat-reports
-        view-distance-fix
+        modernfix-mvus
+        vmp-fabric
+
         servux
-        #achievements-optimizer
-        architectury-api # achievements-optimizer dependency
+        view-distance-fix
         balm # soft dependency
         carpet
         carpet-tis-addition
-
+        no-chat-reports
+        #chunky
+        packet-fixer
+        luckperms
         #bluemap
         #axiom
         vanish
+        simple-voice-chat
         appleskin
         armor-stands
 
@@ -162,31 +163,29 @@ services:
         #fabric-permissions-api
 
         spark
-        ferrite-core
         #krypton
+        ferrite-core
         lithium
         scalablelux
         c2me-fabric
-        luckperms
         servercore
-        packet-fixer
         alternate-current
-        #chunky
         clumps
         get-it-together-drops
         lmd
         zfastnoise
-        no-chat-reports
-        view-distance-fix
-        servux
-        #achievements-optimizer
-        architectury-api # achievements-optimizer dependency
-        balm # soft dependency
-        carpet
-        carpet-tis-addition
         modernfix-mvus
         vmp-fabric
 
+        servux
+        view-distance-fix
+        balm # soft dependency
+        carpet
+        carpet-tis-addition
+        no-chat-reports
+        #chunky
+        packet-fixer
+        luckperms
         #bluemap
         #axiom
         vanish
