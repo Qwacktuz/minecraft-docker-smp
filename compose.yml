@@ -49,12 +49,11 @@ services:
         fabric-api
         fabric-language-kotlin
         fabricexporter
-        fabric-permissions-api
+        #fabric-permissions-api
 
-        withererd-foxy-jumpscare
         spark
         ferrite-core
-        krypton
+        #krypton
         lithium
         scalablelux
         c2me-fabric
@@ -62,15 +61,15 @@ services:
         servercore
         packet-fixer
         alternate-current
-        chunky
+        #chunky
         clumps
-        get-it-together-drops
+        #get-it-together-drops
         lmd
         zfastnoise
         no-chat-reports
         view-distance-fix
         servux
-        achievements-optimizer
+        #achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
         carpet
@@ -160,11 +159,11 @@ services:
         fabric-api
         fabric-language-kotlin
         fabricexporter
-        fabric-permissions-api
+        #fabric-permissions-api
 
         spark
         ferrite-core
-        krypton
+        #krypton
         lithium
         scalablelux
         c2me-fabric
@@ -172,15 +171,15 @@ services:
         servercore
         packet-fixer
         alternate-current
-        chunky
+        #chunky
         clumps
-        get-it-together-drops
+        #get-it-together-drops
         lmd
         zfastnoise
         no-chat-reports
         view-distance-fix
         servux
-        achievements-optimizer
+        #achievements-optimizer
         architectury-api # achievements-optimizer dependency
         balm # soft dependency
         carpet
@@ -190,7 +189,6 @@ services:
         #axiom
         vanish
         simple-voice-chat
-        #plasmo-voice # TODO: migrate from svc
         appleskin
         armor-stands
 
