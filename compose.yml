@@ -11,7 +11,7 @@ services:
       EULA: true
       TYPE: FABRIC
 
-      VERSION: "26.1.2"
+      VERSION: "26.1"
       MOTD: "%TYPE% test server running §l§cMinecraft§r §n%VERSION%"
       ICON: "/icon.png"
       OVERRIDE_ICON: true
@@ -122,7 +122,7 @@ services:
       EULA: true
       TYPE: FABRIC
 
-      VERSION: "26.1.2"
+      VERSION: "26.1"
       MOTD: "%TYPE% server running §l§cMinecraft§r §n%VERSION%.\ Aka A §g§lminecraft§r §u-.-§r §5§mServer§r made by §a§kkaktus"
       ICON: "/icon.png"
       OVERRIDE_ICON: true
