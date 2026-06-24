@@ -173,7 +173,7 @@ services:
         alternate-current
         #chunky
         clumps
-        #get-it-together-drops
+        get-it-together-drops
         lmd
         zfastnoise
         no-chat-reports
@@ -184,6 +184,8 @@ services:
         balm # soft dependency
         carpet
         carpet-tis-addition
+        modernfix-mvus
+        vmp-fabric
 
         #bluemap
         #axiom
