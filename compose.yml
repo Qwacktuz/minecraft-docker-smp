@@ -89,6 +89,7 @@ services:
         carpet setDefault optimizedTNTHighPriority true
         carpet setDefault optimizedFastEntityMovement true
         carpet setDefault commandPlayer true
+        carpet setDefault openFakePlayerInventory true
 
     volumes:
       - ./static/icon.png:/icon.png
@@ -201,6 +202,7 @@ services:
         carpet setDefault optimizedTNTHighPriority true
         carpet setDefault optimizedFastEntityMovement true
         carpet setDefault commandPlayer true
+        carpet setDefault openFakePlayerInventory true
 
       # Manual LuckPerms one-off commands (should've used nix ;-;)
       #lp group default permission set tabtps.tps true
