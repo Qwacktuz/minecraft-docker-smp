@@ -71,6 +71,7 @@ services:
         balm # soft dependency
         carpet
         carpet-tis-addition
+        gca
         no-chat-reports
         #chunky
         packet-fixer
@@ -182,6 +183,7 @@ services:
         balm # soft dependency
         carpet
         carpet-tis-addition
+        gca
         no-chat-reports
         #chunky
         packet-fixer
