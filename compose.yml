@@ -150,7 +150,7 @@ services:
       RCON_PASSWORD: ${RCON_PASSWORD}
 
       USE_MEOWICE_FLAGS: true
-      MEMORY: 4.5G
+      MEMORY: 4608M
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
