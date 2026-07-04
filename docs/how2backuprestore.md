@@ -21,6 +21,9 @@ First remove the tailscale entry/key for `mc-prod` host in the tailscale admin c
 ```sh
 tofu destroy
 tofu apply -auto-approve
+git commit --allow-empty -m "Trigger deployment on new server"
+git push origin main
+
 ```
 
 > [!NOTE]
