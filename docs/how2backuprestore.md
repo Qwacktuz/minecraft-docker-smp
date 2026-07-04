@@ -23,7 +23,6 @@ tofu destroy
 tofu apply -auto-approve
 git commit --allow-empty -m "Trigger deployment on new server"
 git push origin main
-
 ```
 
 > [!NOTE]
