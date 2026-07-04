@@ -78,7 +78,7 @@ variable "server_name" {
 variable "server_type" {
   description = "Instance type"
   type        = string
-  default     = "cx43" # AMD64, 8 vCPU, 16GB RAM
+  default     = "cx33" # AMD64, 8 vCPU, 16GB RAM
 }
 
 variable "server_image" {
