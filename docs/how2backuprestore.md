@@ -23,6 +23,10 @@ tofu destroy
 tofu apply -auto-approve
 git commit --allow-empty -m "Trigger deployment on new server"
 git push origin main
+
+# On the server
+./app/scripts/restore-backup.sh
+docker compose up -d
 ```
 
 > [!NOTE]
