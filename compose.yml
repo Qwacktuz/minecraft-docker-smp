@@ -175,6 +175,7 @@ services:
         clumps
         get-it-together-drops
         lmd
+        almanac
         zfastnoise
         modernfix-mvus
         vmp-fabric
