@@ -239,7 +239,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 6.5G
+          memory: 6656M
     networks:
       minecraft-network:
         aliases:
