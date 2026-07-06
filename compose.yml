@@ -170,10 +170,10 @@ services:
         lithium
         scalablelux
         c2me-fabric
-        #servercore # conflicts with lmd
+        servercore 
         alternate-current
         clumps
-        #get-it-together-drops
+        get-it-together-drops
         lmd
         zfastnoise
         modernfix-mvus
