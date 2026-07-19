@@ -176,7 +176,7 @@ services:
         get-it-together-drops
         lmd
         zfastnoise
-        modernfix-mvus
+        #modernfix-mvus
 
         servux
         balm # soft dependency
@@ -185,7 +185,7 @@ services:
         gca
         no-chat-reports
         #chunky
-        packet-fixer
+        #packet-fixer
         luckperms
         #bluemap
         #axiom
