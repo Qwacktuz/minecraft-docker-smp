@@ -170,17 +170,15 @@ services:
         lithium
         scalablelux
         c2me-fabric
-        servercore 
+        #servercore 
         alternate-current
         clumps
         get-it-together-drops
         lmd
         zfastnoise
         modernfix-mvus
-        vmp-fabric
 
         servux
-        view-distance-fix
         balm # soft dependency
         carpet
         carpet-tis-addition
