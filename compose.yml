@@ -191,6 +191,7 @@ services:
         #axiom
         vanish
         simple-voice-chat
+        webcam-mod
         appleskin
         armor-stands
 
