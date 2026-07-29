@@ -116,7 +116,8 @@ services:
       - no-new-privileges:true
     ports:
       - "25565:25565/tcp"
-      - "24454:24454/udp" # simplevoicechat
+      - "24454:24454/udp" # simplevoicechat mod
+      - "25454:25454/udp" # webcam mod
       - "${TS_IP}:25585:25585/tcp" # fabricexporter
     environment:
       EULA: true
@@ -176,6 +177,7 @@ services:
         zfastnoise
         modernfix-mvus
 
+        syncmatica
         servux
         balm # soft dependency
         carpet

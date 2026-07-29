@@ -61,11 +61,19 @@ resource "hcloud_firewall" "minecraft_fw" {
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
-  # Simple Voice Chat UDP
+  # simplevoicechat mod udp
   rule {
     direction  = "in"
     protocol   = "udp"
     port       = "24454"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  # webcam mod udp
+  rule {
+    direction  = "in"
+    protocol   = "udp"
+    port       = "25454"
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
