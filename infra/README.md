@@ -32,9 +32,16 @@ This directory contains the OpenTofu (Terraform) configuration to provision the 
 # Initialize providers
 tofu init
 
-# Deploy/Update infrastructure
+# Deploy infrastructure
 tofu apply
+
+# Tear down infrastructure
+tofu destroy
 ```
+
+Make sure to name the server to `mc-prod` in tailscale admin console
+
+Run the restore script
 
 ## Secrets Management
 
