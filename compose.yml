@@ -1,6 +1,6 @@
 services:
   # minecraft-test:
-  #   image: itzg/minecraft-server:java25-alpine
+  #   image: itzg/minecraft-server:stable
   #   container_name: fabric-creative
   #   restart: unless-stopped
   #   security_opt:
@@ -111,7 +111,7 @@ services:
 
   # Main SMP server
   minecraft-service:
-    image: itzg/minecraft-server:java25-alpine
+    image: itzg/minecraft-server:stable
     container_name: fabric-server
     restart: unless-stopped
     security_opt:
