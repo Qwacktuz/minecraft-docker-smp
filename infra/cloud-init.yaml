@@ -26,6 +26,8 @@ packages:
   - fastfetch
   - fail2ban
   - age
+  - docker.io
+  - docker-compose
 
 write_files:
   - path: /etc/sysctl.d/99-tailscale.conf
@@ -57,7 +59,7 @@ runcmd:
   - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
 
   # Install & initialize Docker
-  - curl -fsSL https://get.docker.com | sh
+  #- curl -fsSL https://get.docker.com | sh # installed through package manager
   - systemctl enable --now docker
   - usermod -aG docker ${username}
 
