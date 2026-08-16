@@ -1,6 +1,4 @@
-bootcmd:
-  - export DEBIAN_FRONTEND=noninteractive
-  - export UCF_FORCE_CONFFOLD=1
+#cloud-config
 
 users:
   - name: ${username}
@@ -41,13 +39,8 @@ write_files:
       PermitRootLogin no
       PubkeyAuthentication yes
 
-  # Pin Tailscale direct port to match UFW rule
-  - path: /etc/default/tailscaled
-    content: |
-      PORT=41641
-      FLAGS=""
-
 runcmd:
+  - set -e
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
 
   # Apply Sysctl settings
@@ -55,11 +48,12 @@ runcmd:
 
   # Install & initialize Tailscale
   - curl -fsSL https://tailscale.com/install.sh | sh
-  - systemctl enable --now tailscaled
+  - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
+  - systemctl restart tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
 
-  # Install & initialize Docker
-  - curl -fsSL https://get.docker.com | sh # installed through package manager
+  # Install Docker via official script
+  - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
   - usermod -aG docker ${username}
 
