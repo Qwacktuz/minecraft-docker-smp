@@ -1,3 +1,5 @@
+#cloud-config
+
 users:
   - name: ${username}
     groups: sudo
@@ -5,6 +7,12 @@ users:
     sudo: ["ALL=(ALL) NOPASSWD:ALL"]
     ssh_authorized_keys:
       - ${ssh_pub_key}
+
+# Native Swap Configuration (2 GiB)
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2147483648
 
 package_update: true
 package_upgrade: true
@@ -24,39 +32,47 @@ write_files:
     content: |
       net.ipv4.ip_forward = 1
       net.ipv6.conf.all.forwarding = 1
+
   - path: /etc/ssh/sshd_config.d/minecraft-hardening.conf
     content: |
       PasswordAuthentication no
       PermitRootLogin no
       PubkeyAuthentication yes
 
+  # Pin Tailscale direct port to match UFW rule
+  - path: /etc/default/tailscaled
+    content: |
+      PORT=41641
+      FLAGS=""
+
 runcmd:
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
 
-  # Install tailscale
+  # Apply Sysctl settings
   - sysctl -p /etc/sysctl.d/99-tailscale.conf
+
+  # Install & initialize Tailscale
   - curl -fsSL https://tailscale.com/install.sh | sh
+  - systemctl enable --now tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
 
-  # Install docker
+  # Install & initialize Docker
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
   - usermod -aG docker ${username}
 
-  # Install sops
-  - curl -LO https://github.com/getsops/sops/releases/download/v3.13.1/sops-v3.13.1.linux.amd64
-  - mv sops-v3.13.1.linux.amd64 /usr/local/bin/sops
+  # Install SOPS CLI
+  - curl -LO https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+  - mv sops-v3.13.3.linux.amd64 /usr/local/bin/sops
   - chmod +x /usr/local/bin/sops
 
-  # Ensure UFW is installed (Debian 13 might have minimal base)
-  - apt-get update
-  - apt-get install -y ufw
+  # Apply SSH Hardening Config
+  - systemctl reload sshd || systemctl reload ssh
 
-  # Firewall rules
+  # Configure UFW Rules
+  - systemctl enable ufw
   - /usr/sbin/ufw default deny incoming
   - /usr/sbin/ufw default allow outgoing
-
-  # Allow Game Traffic publicly
   - /usr/sbin/ufw allow 24464/tcp comment 'Minecraft Test/Creative'
   - /usr/sbin/ufw allow 25565/tcp comment 'Minecraft'
   - /usr/sbin/ufw allow 25565/udp comment 'Minecraft'
@@ -64,7 +80,6 @@ runcmd:
   - /usr/sbin/ufw allow 41641/udp comment 'Tailscale Direct Communication'
   - /usr/sbin/ufw allow in on tailscale0 comment 'Trust Tailnet Traffic'
   - /usr/sbin/ufw deny 22/tcp comment 'Block Public SSH'
-
   - /usr/sbin/ufw --force enable
 
   - [sh, -c, "echo 'Bootstrapping finished.' >> /var/log/bootstrap.log"]
