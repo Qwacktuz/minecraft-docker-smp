@@ -179,6 +179,7 @@ services:
         zfastnoise
         modernfix-mvus
 
+        bookshelf-inspector
         syncmatica
         servux
         balm # soft dependency
