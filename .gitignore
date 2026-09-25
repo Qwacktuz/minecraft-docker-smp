@@ -1,6 +1,7 @@
 # Temporarily ignore
 .gitlab-ci.yml
 sync-secrets.sh
+.devenv/
 
 # Environment variables
 *key*.txt
