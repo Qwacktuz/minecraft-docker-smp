@@ -125,7 +125,7 @@ services:
       EULA: true
       TYPE: FABRIC
 
-      VERSION: "26.2"
+      VERSION: "26.3"
       MOTD: "%TYPE% server running §l§cMinecraft§r §n%VERSION%.\ Aka A §g§lminecraft§r §u-.-§r §5§mServer§r made by §a§kkaktus"
       ICON: "/icon.png"
       OVERRIDE_ICON: true
@@ -155,6 +155,7 @@ services:
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
+      VERSION_FROM_MODRINTH_PROJECTS: true
       MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: ALPHA
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
       MODRINTH_PROJECTS: |
