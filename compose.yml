@@ -163,7 +163,7 @@ services:
 
         fabric-api
         fabric-language-kotlin
-        fabricexporter
+        #fabricexporter # TODO: enable when 26.3 release is out
         #fabric-permissions-api
 
         spark
