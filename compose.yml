@@ -171,7 +171,7 @@ services:
         ferrite-core
         lithium
         scalablelux
-        c2me-fabric
+        # c2me-fabric # TODO: enable when 26.3 release is out
         servercore 
         alternate-current
         clumps
