@@ -156,23 +156,23 @@ services:
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: SNoKz9
       # VERSION_FROM_MODRINTH_PROJECTS: true
-      MODRINTH_ALLOWED_VERSION_TYPE: ALPHA
-      MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: ALPHA
+      MODRINTH_ALLOWED_VERSION_TYPE: RELEASE
+      MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: RELEASE
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
       MODRINTH_PROJECTS: |
         datapack:skull-portable
 
         fabric-api
         fabric-language-kotlin
-        fabricexporter 
+        #fabricexporter # No 26.3 release candidate yet
         #fabric-permissions-api
 
         spark
         #krypton
         ferrite-core
         lithium
-        scalablelux
-        c2me-fabric 
+        scalablelux:alpha
+        c2me-fabric:alpha
         servercore 
         alternate-current
         clumps
@@ -195,7 +195,7 @@ services:
         #bluemap
         #axiom
         vanish
-        simple-voice-chat 
+        simple-voice-chat:beta
         webcam-mod
         appleskin
         armor-stands
