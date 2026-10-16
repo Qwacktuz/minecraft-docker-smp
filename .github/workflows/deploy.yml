@@ -14,8 +14,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+
   terraform:
     name: OpenTofu Infrastructure
+    needs: validate
     runs-on: ubuntu-latest
     environment: mc-prod
     defaults:

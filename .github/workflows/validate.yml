@@ -1,8 +1,11 @@
 name: Validate configuration
 
 on:
+  workflow_call:
   pull_request:
   push:
+    branches-ignore:
+      - main
 
 permissions:
   contents: read
