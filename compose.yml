@@ -1,3 +1,9 @@
+x-logging: &bounded-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # minecraft-test:
   #   image: itzg/minecraft-server:stable
@@ -113,14 +119,16 @@ services:
   minecraft-service:
     image: itzg/minecraft-server:stable
     container_name: fabric-server
+    stop_grace_period: 2m
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     ports:
       - "25565:25565/tcp"
       - "24454:24454/udp" # simplevoicechat mod
       - "25454:25454/udp" # webcam mod
-      - "${TS_IP}:25585:25585/tcp" # fabricexporter
+      - "${TS_IP:?Set TS_IP in .env}:25585:25585/tcp" # fabricexporter
     environment:
       EULA: true
       TYPE: FABRIC
@@ -142,13 +150,13 @@ services:
       SIMULATION_DISTANCE: 10
 
       EXISTING_OPS_FILE: "SYNCHRONIZE"
-      OPS: "${MC_OPS}"
+      OPS: "${MC_OPS:-}"
       EXISTING_WHITELIST_FILE: "SYNCHRONIZE"
-      WHITELIST: "${MC_WHITELIST}"
+      WHITELIST: "${MC_WHITELIST:?Set MC_WHITELIST in .env}"
       ENFORCE_WHITELIST: true
       ENABLE_WHITELIST: true
 
-      RCON_PASSWORD: ${RCON_PASSWORD}
+      RCON_PASSWORD: ${RCON_PASSWORD:?Set RCON_PASSWORD in .env}
 
       USE_MEOWICE_FLAGS: true
       MEMORY: 5G
@@ -254,13 +262,14 @@ services:
     container_name: mc-backup
     hostname: mc-backup-worker
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     environment:
       INITIAL_DELAY: 1m
       BACKUP_INTERVAL: 1h
       RCON_HOST: minecraft-service
-      RCON_PASSWORD: "${RCON_PASSWORD}"
+      RCON_PASSWORD: "${RCON_PASSWORD:?Set RCON_PASSWORD in .env}"
       PAUSE_IF_NO_PLAYERS: true
 
       # Compression & Size Savings (exclude bluemap)
@@ -268,10 +277,10 @@ services:
 
       PRUNE_RESTIC_RETENTION: "--keep-within 24h --keep-daily 7 --keep-weekly 4 --keep-monthly 6"
       BACKUP_METHOD: "restic"
-      RESTIC_REPOSITORY: "s3:${R2_ENDPOINT}/${R2_BUCKET_NAME}"
-      RESTIC_PASSWORD: "${RESTIC_PASSWORD}"
-      AWS_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY}"
+      RESTIC_REPOSITORY: "s3:${R2_ENDPOINT:?Set R2_ENDPOINT in .env}/${R2_BUCKET_NAME:?Set R2_BUCKET_NAME in .env}"
+      RESTIC_PASSWORD: "${RESTIC_PASSWORD:?Set RESTIC_PASSWORD in .env}"
+      AWS_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in .env}"
+      AWS_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in .env}"
       RESTIC_OPTS: "-o s3.connections=10 -o s3.region=auto --compression auto"
     volumes:
       - ./data/minecraft:/data:ro
@@ -288,12 +297,13 @@ services:
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     ports:
-      - "${TS_IP}:3000:3000"
+      - "${TS_IP:?Set TS_IP in .env}:3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -308,6 +318,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     command:
@@ -315,7 +326,7 @@ services:
       - "--web.enable-remote-write-receiver"
       - "--storage.tsdb.retention.time=15d"
     ports:
-      - "${TS_IP}:9090:9090"
+      - "${TS_IP:?Set TS_IP in .env}:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -329,10 +340,11 @@ services:
     image: grafana/loki:latest
     container_name: loki
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     ports:
-      - "${TS_IP}:3100:3100"
+      - "${TS_IP:?Set TS_IP in .env}:3100:3100"
     # command: "-config.file=/etc/loki/local-config.yaml"
     volumes:
       # - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
@@ -347,10 +359,11 @@ services:
     image: grafana/alloy:latest
     container_name: alloy
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     ports:
-      - "${TS_IP}:12345:12345"
+      - "${TS_IP:?Set TS_IP in .env}:12345:12345"
     command:
       [
         "run",
@@ -382,10 +395,11 @@ services:
     image: ghcr.io/getarcaneapp/manager:latest
     container_name: arcane
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     ports:
-      - "${TS_IP}:3552:3552"
+      - "${TS_IP:?Set TS_IP in .env}:3552:3552"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - arcane-data:/app/data
@@ -393,8 +407,8 @@ services:
       - APP_URL=http://localhost:3552
       - PUID=1000
       - PGID=1000
-      - ENCRYPTION_KEY=${ARCANE_ENCRYPTION_KEY}
-      - JWT_SECRET=${ARCANE_JWT_SECRET}
+      - ENCRYPTION_KEY=${ARCANE_ENCRYPTION_KEY:?Set ARCANE_ENCRYPTION_KEY in .env}
+      - JWT_SECRET=${ARCANE_JWT_SECRET:?Set ARCANE_JWT_SECRET in .env}
 
 networks:
   minecraft-network:
