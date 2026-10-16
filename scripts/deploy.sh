@@ -27,6 +27,17 @@ printf '\nTS_IP=%s\n' "$TS_IP" >> "$ENV_FILE"
 
 compose=(docker compose --env-file "$ENV_FILE")
 "${compose[@]}" config --quiet
+
+# Older releases stored Loki data in the container's /tmp/loki directory.
+loki_id=$("${compose[@]}" ps --all --quiet loki)
+if [[ -n "$loki_id" && ! -f .loki-storage-migrated ]]; then
+  loki_config_mount=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/loki/local-config.yaml"}}{{.Type}}{{end}}{{end}}' "$loki_id")
+  if [[ "$loki_config_mount" != bind ]]; then
+    echo "ERROR: Preserve existing Loki data before deployment; see docs/loki-migration.md." >&2
+    exit 1
+  fi
+fi
+
 echo "Pulling images before interrupting the server..."
 "${compose[@]}" pull
 

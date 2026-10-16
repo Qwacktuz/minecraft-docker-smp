@@ -345,9 +345,9 @@ services:
       - no-new-privileges:true
     ports:
       - "${TS_IP:?Set TS_IP in .env}:3100:3100"
-    # command: "-config.file=/etc/loki/local-config.yaml"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
     volumes:
-      # - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     networks:
       minecraft-network:
@@ -384,8 +384,8 @@ services:
       - /proc:/host/proc:ro
       - /run/udev/data:/host/run/udev/data:ro
 
-      # Mount minecraft logs
-      # - ./data/minecraft/logs:/var/log/minecraft:ro
+      # Mount the parent so a restored world directory is picked up.
+      - ./data:/var/lib/minecraft:ro
     networks:
       minecraft-network:
         aliases:

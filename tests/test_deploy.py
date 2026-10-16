@@ -32,7 +32,12 @@ if name == "docker":
         assert Path(".env").read_text() == "OLD=preserved\n"
     if stage in ("config", "pull", "up") and stage in args:
         sys.exit(1)
-    if "ps" in args:
+    if "inspect" in args:
+        print("" if stage == "legacy-loki" else "bind")
+    if "ps" in args and "--quiet" in args:
+        if stage in ("legacy-loki", "configured-loki"):
+            print("loki-container-id")
+    elif "ps" in args:
         print("minecraft-service")
 '''
 
@@ -94,6 +99,17 @@ class DeployTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("Deployment completed", result.stdout)
         self.assertFalse(any("say Deployment complete." in call for call in calls))
+
+    def test_legacy_loki_blocks_recreation(self):
+        root, result, calls = self.run_deploy("legacy-loki")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("loki-migration.md", result.stderr)
+        self.assertEqual((root / ".env").read_text(), "OLD=preserved\n")
+        self.assertFalse(any("up" in call or "pull" in call for call in calls))
+
+    def test_configured_loki_allows_deployment(self):
+        _, result, _ = self.run_deploy("configured-loki")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

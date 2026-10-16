@@ -60,26 +60,6 @@ prometheus.scrape "node_exporter" {
 	forward_to = [prometheus.remote_write.default.receiver]
 }
 
-discovery.docker "all_containers" {
-  host = "unix:///var/run/docker.sock"
-}
-
-// Filter to find the minecraft container only
-discovery.relabel "minecraft_filter" {
-  targets = discovery.docker.all_containers.targets
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex = "/.*(fabric-server).*" 
-    action = "keep"
-  }
-  
-  rule {
-    action = "replace"
-    target_label = "job"
-    replacement = "fabric-server_logs"
-  }
-}
-
 // Define where to send logs (loki container)
 loki.write "default" {
   endpoint {
@@ -87,9 +67,12 @@ loki.write "default" {
   }
 }
 
-loki.source.docker "minecraft_logs" {
-  host = "unix:///var/run/docker.sock"
-  targets = discovery.relabel.minecraft_filter.output
+// Keep the dashboard labels stable without granting Docker API access.
+loki.source.file "minecraft_logs" {
+  targets = [{
+    __path__ = "/var/lib/minecraft/minecraft/logs/latest.log",
+    job = "fabric-server_logs",
+    service_name = "fabric-server_logs",
+  }]
   forward_to = [loki.write.default.receiver]
 }
-

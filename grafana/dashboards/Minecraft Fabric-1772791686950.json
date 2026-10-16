@@ -23,7 +23,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -73,7 +73,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "sum(minecraft_players_online{instance=~\"$instance\",job=~\"$job\"})",
@@ -89,7 +89,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -147,7 +147,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "minecraft_mspt{type=\"mean\",instance=~\"$instance\",job=~\"$job\"}",
@@ -163,7 +163,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -221,7 +221,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "minecraft_tps{instance=~\"$instance\",job=~\"$job\"}",
@@ -237,7 +237,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -290,7 +290,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -309,7 +309,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -359,7 +359,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "sum(minecraft_entities{instance=~\"$instance\",job=~\"$job\"})",
@@ -375,7 +375,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -460,7 +460,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "sum(minecraft_players_online{instance=~\"$instance\",job=~\"$job\"}) by (world)",
@@ -475,7 +475,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -560,7 +560,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "minecraft_tps{instance=~\"$instance\",job=~\"$job\"}",
@@ -575,7 +575,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "description": "The duration required to compute each tick. 50 milliseconds per tick = 20 ticks per second",
       "fieldConfig": {
@@ -663,7 +663,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -680,7 +680,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -737,7 +737,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -755,7 +755,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -840,7 +840,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "sum(minecraft_entities{instance=~\"$instance\",job=~\"$job\"}) by (group)",
@@ -855,7 +855,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -940,7 +940,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "sum(minecraft_entities{instance=~\"$instance\",job=~\"$job\"}) by (world)",
@@ -955,7 +955,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -1038,7 +1038,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "expr": "rate(process_cpu_seconds_total{instance=~\"$instance\",job=~\"$job\"}[10m])",
@@ -1064,7 +1064,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -1149,7 +1149,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "exemplar": true,
           "expr": "sum(minecraft_loaded_chunks{instance=~\"$instance\",job=~\"$job\"}) by (world)",
@@ -1164,7 +1164,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "description": "Time spent in a given JVM garbage collector in seconds.",
       "fieldConfig": {
@@ -1247,7 +1247,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "expr": "rate({__name__=~\"jvm_gc_collection_seconds_sum\",instance=~\"$instance\",job=~\"$job\"}[10m])",
@@ -1258,7 +1258,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "expr": "rate({__name__=~\"jvm_gc_collection_seconds_count\",instance=~\"$instance\",job=~\"$job\"}[10m])",
@@ -1284,7 +1284,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -1363,7 +1363,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "exemplar": true,
@@ -1380,7 +1380,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "description": "Current count of threads by state",
       "fieldConfig": {
@@ -1463,7 +1463,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "expr": "sum(jvm_threads_state{instance=~\"$instance\",job=~\"$job\"}) by (state)",
@@ -1475,7 +1475,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -1493,7 +1493,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "efb6z2z0qwow0c"
+        "uid": "prometheus-main"
       },
       "fieldConfig": {
         "defaults": {
@@ -1574,7 +1574,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "efb6z2z0qwow0c"
+            "uid": "prometheus-main"
           },
           "editorMode": "code",
           "expr": "{__name__=~\"jvm_threads_(current|daemon|peak|deadlocked|deadlocked_monitor)\",instance=~\"$instance\",job=~\"$job\"}",

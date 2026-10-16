@@ -23,7 +23,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "bfb6z9u35ct8ge"
+        "uid": "loki-main"
       },
       "fieldConfig": {
         "defaults": {},
@@ -51,22 +51,22 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "bfb6z9u35ct8ge"
+            "uid": "loki-main"
           },
           "direction": "backward",
           "editorMode": "builder",
-          "expr": "{service_name=\"minecraft\", job=\"minecraft\"} |= `joined the game`",
+          "expr": "{service_name=\"fabric-server_logs\", job=\"fabric-server_logs\"} |= `joined the game`",
           "queryType": "range",
           "refId": "A"
         },
         {
           "datasource": {
             "type": "loki",
-            "uid": "bfb6z9u35ct8ge"
+            "uid": "loki-main"
           },
           "direction": "backward",
           "editorMode": "builder",
-          "expr": "{service_name=\"minecraft\", job=\"minecraft\"} |= `left the game`",
+          "expr": "{service_name=\"fabric-server_logs\", job=\"fabric-server_logs\"} |= `left the game`",
           "queryType": "range",
           "refId": "B"
         }
@@ -77,7 +77,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "bfb6z9u35ct8ge"
+        "uid": "loki-main"
       },
       "fieldConfig": {
         "defaults": {},
@@ -105,22 +105,22 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "bfb6z9u35ct8ge"
+            "uid": "loki-main"
           },
           "direction": "backward",
           "editorMode": "builder",
-          "expr": "{service_name=\"minecraft\", job=\"minecraft\"} |= `to the whitelist`",
+          "expr": "{service_name=\"fabric-server_logs\", job=\"fabric-server_logs\"} |= `to the whitelist`",
           "queryType": "range",
           "refId": "A"
         },
         {
           "datasource": {
             "type": "loki",
-            "uid": "bfb6z9u35ct8ge"
+            "uid": "loki-main"
           },
           "direction": "backward",
           "editorMode": "builder",
-          "expr": "{service_name=\"minecraft\", job=\"minecraft\"} |= `from the whitelist`",
+          "expr": "{service_name=\"fabric-server_logs\", job=\"fabric-server_logs\"} |= `from the whitelist`",
           "queryType": "range",
           "refId": "B"
         }
@@ -131,7 +131,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "bfb6z9u35ct8ge"
+        "uid": "loki-main"
       },
       "fieldConfig": {
         "defaults": {},
@@ -159,7 +159,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "bfb6z9u35ct8ge"
+            "uid": "loki-main"
           },
           "direction": "backward",
           "editorMode": "builder",

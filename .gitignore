@@ -11,6 +11,7 @@ sync-secrets.sh
 .env.*
 !.env.example
 age.key
+.loki-storage-migrated
 .secrets
 .vars
 .direnv/
