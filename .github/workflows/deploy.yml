@@ -6,6 +6,13 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: minecraft-production
+  cancel-in-progress: false
+
 jobs:
   terraform:
     name: OpenTofu Infrastructure
@@ -49,7 +56,7 @@ jobs:
   # -- Application (Docker Compose) ---
   deploy:
     name: Deploy Application
-    needs: terraform # TODO: needs infra?
+    needs: terraform
     runs-on: ubuntu-latest
     environment: mc-prod
     steps:
@@ -64,104 +71,47 @@ jobs:
           tags: tag:ci
 
       - name: Resolve Server Tailscale IP
+        env:
+          TS_HOST: ${{ vars.TS_HOST }}
         run: |
-          echo "Waiting for ${{ vars.TS_HOST }} to register on Tailnet..."
+          : "${TS_HOST:?Set the TS_HOST repository variable}"
+          echo "Waiting for $TS_HOST to register on Tailnet..."
+          # TS_HOST is expanded by the child shell.
+          # shellcheck disable=SC2016
           timeout 300s bash -c '
-            until tailscale status | grep -q "${{ vars.TS_HOST }}"; do
+            until tailscale ip -4 "$TS_HOST" >/dev/null 2>&1; do
               echo "Server not found yet. Retrying in 10 seconds..."
               sleep 10
             done
           '
-          TS_IP=$(tailscale ip -4 ${{ vars.TS_HOST }})
-          echo "Server Tailscale IP: $TS_IP"
-          echo "TS_IP=$TS_IP" >> $GITHUB_ENV
+          TS_IP=$(tailscale ip -4 "$TS_HOST")
+          echo "TS_IP=$TS_IP" >> "$GITHUB_ENV"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+          DEPLOY_SHA: ${{ github.sha }}
         with:
           host: ${{ env.TS_IP }}
           username: ${{ vars.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: SOPS_AGE_KEY
+          envs: SOPS_AGE_KEY,DEPLOY_SHA
+          command_timeout: 30m
           script: |
-            set -e
-
+            set -eu
             APP_DIR="$HOME/app"
             REPO="https://github.com/Qwacktuz/minecraft-smp.git"
-            BRANCH="main"
-            SERVICE="fabric-server"
 
-            echo "Starting deployment..."
-
-            mkdir -p "$APP_DIR" # done in terraform
+            sudo cloud-init status --wait
+            mkdir -p "$APP_DIR"
+            exec 9>"$HOME/.minecraft-deploy.lock"
+            flock -w 1800 9
             cd "$APP_DIR"
 
-            # clone repo if it doesn't exist
-            if [ ! -d ".git" ]; then
-              echo "Cloning repository..."
+            if [ ! -d .git ]; then
               git clone "$REPO" .
             fi
-
-            echo "Updating repository..."
-            git fetch origin "$BRANCH"
-            git reset --hard "origin/$BRANCH"
-
-            echo "Generating runtime environment..."
-            echo "$SOPS_AGE_KEY" > age.key
-            chmod 600 age.key
-            export SOPS_AGE_KEY_FILE=$(pwd)/age.key
-
-            /usr/local/bin/sops --decrypt --output-type dotenv secrets/secrets.enc.env > .env
-
-            # Check if the file is empty
-            if [ ! -s .env ]; then
-              echo "ERROR: .env file is empty after decryption!"
-              exit 1
-            fi
-
-            rm age.key
-
-            echo "Add runtime variables..."
-            cat <<EOF >> .env
-            TS_IP=$(tailscale ip -4)
-            EOF
-
-            chmod 600 .env
-
-            echo "--- Environment Check ---"
-            # This confirms the file exists and has content without leaking secrets
-            if [ -f .env ]; then
-                echo ".env file created successfully ($(wc -l < .env) lines)"
-            else
-                echo "ERROR: .env file was not created!"
-                exit 1
-            fi
-
-
-            if docker compose ps --services --filter "status=running" | grep -q "fabric-server"; then
-              echo "Notifying players..."
-              docker compose exec -T fabric-server rcon-cli "say §cSystem update initiated..."
-              docker compose exec -T fabric-server rcon-cli "save-all"
-              sleep 5
-            fi
-
-            echo "Pulling container images..."
-            docker compose pull
-            echo "Updating containers... "
-            docker compose up -d --remove-orphans
-            echo "Cleaning up unused images... "
-            docker system prune -f
-
-            # post deploy notification
-            sleep 10
-            if docker compose ps --services --filter "status=running" | grep -q "$SERVICE"; then
-              docker compose exec -T "$SERVICE" rcon-cli "title @a clear" || true
-              docker compose exec -T "$SERVICE" rcon-cli "playsound entity.player.levelup master @a" || true
-              docker compose exec -T "$SERVICE" rcon-cli "say §aDeployment complete! Server is stable." || true
-              docker compose exec -T "$SERVICE" rcon-cli \
-                "title @a actionbar {\"text\":\"§aSystem Update Complete\", \"bold\":true}" || true
-            fi
-
-            echo "Deployment finished successfully."
+            git fetch origin "$DEPLOY_SHA"
+            git reset --hard "$DEPLOY_SHA"
+            APP_DIR="$APP_DIR" bash scripts/deploy.sh

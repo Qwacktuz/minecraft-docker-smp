@@ -8,6 +8,9 @@ sync-secrets.sh
 .env
 .env.local
 .env.secrets
+.env.*
+!.env.example
+age.key
 .secrets
 .vars
 .direnv/
@@ -35,6 +38,7 @@ logs/
 
 # Cache
 .cache/
+__pycache__/
 *.tmp
 
 # IDE
