@@ -5,116 +5,6 @@ x-logging: &bounded-logging
     max-file: "3"
 
 services:
-  # minecraft-test:
-  #   image: itzg/minecraft-server:stable
-  #   container_name: fabric-creative
-  #   restart: unless-stopped
-  #   security_opt:
-  #     - no-new-privileges:true
-  #   ports:
-  #     - "24464:25565/tcp"
-  #   environment:
-  #     EULA: true
-  #     TYPE: FABRIC
-  #
-  #     VERSION: "26.2"
-  #     MOTD: "%TYPE% test server running §l§cMinecraft§r §n%VERSION%"
-  #     ICON: "/icon.png"
-  #     OVERRIDE_ICON: true
-  #     LEVEL: "world"
-  #     ONLINE_MODE: true
-  #
-  #     MAX_PLAYERS: "20"
-  #     DIFFICULTY: HARD
-  #     MODE: "SURVIVAL"
-  #     PVP: "TRUE"
-  #
-  #     VIEW_DISTANCE: 12
-  #     SPAWN_PROTECTION: 0
-  #     SIMULATION_DISTANCE: 10
-  #
-  #     EXISTING_OPS_FILE: "SYNCHRONIZE"
-  #     OPS: "${MC_OPS}"
-  #     EXISTING_WHITELIST_FILE: "SYNCHRONIZE"
-  #     WHITELIST: "${MC_WHITELIST}"
-  #     ENFORCE_WHITELIST: true
-  #     ENABLE_WHITELIST: true
-  #
-  #     RCON_PASSWORD: ${RCON_PASSWORD}
-  #
-  #     USE_MEOWICE_FLAGS: true
-  #     MEMORY: 2G
-  #
-  #     REMOVE_OLD_MODS: true
-  #     #VANILLATWEAKS_SHARECODE: SNoKz9
-  #     MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: RELEASE
-  #     MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
-  #     MODRINTH_PROJECTS: |
-  #       #datapack:skull-portable
-  #
-  #       #fabric-api
-  #       #fabric-language-kotlin
-  #       #fabricexporter
-  #       #fabric-permissions-api
-  #
-  #       lmd
-  #       #spark
-  #       #krypton
-  #       #ferrite-core
-  #       #lithium
-  #       #scalablelux
-  #       #c2me-fabric
-  #       #servercore
-  #       #alternate-current
-  #       #clumps
-  #       #get-it-together-drops
-  #       #zfastnoise
-  #       #modernfix-mvus
-  #
-  #       #syncmatica
-  #       #servux
-  #       #balm # soft dependency
-  #       #carpet
-  #       #carpet-tis-addition
-  #       #gca
-  #       #no-chat-reports
-  #       #chunky
-  #       #packet-fixer
-  #       #luckperms
-  #       #bluemap
-  #       #axiom
-  #       #vanish
-  #       #simple-voice-chat
-  #       #webcam-mod
-  #       #appleskin
-  #       #armor-stands
-  #
-  #     RCON_CMDS_STARTUP: |-
-  #       # gamerule players_sleeping_percentage 0
-  #       # carpet setDefault optimizedTNT true
-  #       # carpet setDefault optimizedTNTHighPriority true
-  #       # carpet setDefault optimizedFastEntityMovement true
-  #       # carpet setDefault commandPlayer true
-  #       # carpet setDefault openFakePlayerInventory true
-  #
-  #   volumes:
-  #     - ./static/icon.png:/icon.png
-  #     - ./data/minecraft-test:/data
-  #   healthcheck:
-  #     test: ["CMD", "mc-health"]
-  #     interval: 20s
-  #     timeout: 10s
-  #     retries: 5
-  #     start_period: 6m
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 3G
-  #   networks:
-  #     minecraft-network:
-  #       aliases:
-  #         - mc-creative
-
   # Main SMP server
   minecraft-service:
     image: itzg/minecraft-server:stable
@@ -216,32 +106,10 @@ services:
         carpet setDefault commandPlayer true
         carpet setDefault openFakePlayerInventory true
 
-      # Manual LuckPerms one-off commands (should've used nix ;-;)
-      #lp group default permission set tabtps.tps true
-      #lp group default permission set tabtps.ping true
-      #lp group default permission set tabtps.defaultdisplay true
-      #lp group default permission set tabtps.toggle true
-      #lp group default permission set tabtps.toggle.tab true
-      #lp group default permission set tabtps.toggle.actionbar true
-      #lp group default permission set tabtps.toggle.bossbar true
-
-      #lp creategroup carpet_trusted
-      #lp group carpet_trusted permission set carpet.commands.player true
-      #lp group carpet_trusted parent add default
-
     volumes:
       - ./static/icon.png:/icon.png
       - ./data/minecraft:/data
 
-      # FIXME: Hacky bootstrap (because I am lazy)
-      # - ./mc/bootstrap:/data/functions
-
-      # TODO: add declarative mc mod configs
-      # # Luckperms config
-      # - ./mc/luckperms/luckperms.conf:/data/config/luckperms/luckperms.conf:ro
-      # - ./mc/luckperms/groups:/data/config/luckperms/yaml-storage/groups
-      # # Carpet config
-      # - ./mc/carpet.conf:/data/config/carpet.conf:ro
     healthcheck:
       test: ["CMD", "mc-health"]
       interval: 20s
@@ -284,7 +152,6 @@ services:
       RESTIC_OPTS: "-o s3.connections=10 -o s3.region=auto --compression auto"
     volumes:
       - ./data/minecraft:/data:ro
-      # - ./rclone:/config/rclone
     depends_on:
       minecraft-service:
         condition: service_healthy
@@ -378,7 +245,7 @@ services:
       # Mount logs
       - alloy_data:/var/lib/alloy/data
 
-      # Mount to interal host/ to not mess with container's own system metrics
+      # Host metrics use separate paths from the container filesystem.
       - /:/host/rootfs:ro
       - /sys:/host/sys:ro
       - /proc:/host/proc:ro
@@ -413,7 +280,6 @@ services:
 networks:
   minecraft-network:
     name: minecraft
-    # external: true
 
 volumes:
   grafana_data:
