@@ -1,0 +1,51 @@
+name: Validate configuration
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check shell syntax and deployment lint
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
+          shellcheck scripts/deploy.sh
+
+      - name: Check workflow syntax and shell commands
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo \
+            rhysd/actionlint:1.7.12
+
+      - name: Test configuration and deployment failure paths
+        run: python3 -m unittest discover -s tests -v
+
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.12.3
+
+      - name: Validate infrastructure without accessing its backend
+        working-directory: infra
+        run: |
+          tofu fmt -check
+          tofu init -backend=false -lockfile=readonly
+          tofu validate
+
+      - name: Validate Alloy configuration with the deployed image
+        run: |
+          docker run --rm \
+            -v "$PWD/alloy/config.alloy:/etc/alloy/config.alloy:ro" \
+            grafana/alloy:latest validate /etc/alloy/config.alloy
+
+      - name: Validate Loki configuration with the deployed image
+        run: |
+          docker run --rm \
+            -v "$PWD/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro" \
+            grafana/loki:latest -config.file=/etc/loki/local-config.yaml -verify-config=true
