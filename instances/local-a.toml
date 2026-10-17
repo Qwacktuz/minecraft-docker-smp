@@ -1,0 +1,6 @@
+role = "local"
+release = "local-core"
+game_port = 25566
+heap_mb = 2048
+memory_limit_mb = 3072
+players = []

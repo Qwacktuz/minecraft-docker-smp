@@ -21,6 +21,7 @@ jobs:
         run: |
           for script in scripts/*.sh; do bash -n "$script"; done
           shellcheck scripts/deploy.sh
+          shellcheck bin/smp
 
       - name: Check workflow syntax and shell commands
         run: |
@@ -29,6 +30,9 @@ jobs:
 
       - name: Test configuration and deployment failure paths
         run: python3 -m unittest discover -s tests -v
+
+      - name: Validate isolated local instances
+        run: bin/smp validate
 
       - uses: opentofu/setup-opentofu@v2
         with:

@@ -1,6 +1,8 @@
 # Proposed project foundations
 
-Status: design proposal, 2026-10-17. This document does not change the running stack.
+Status: design proposal, 2026-10-17. Local core checkpoint 1a is implemented in a
+separate runtime path; see [the review and workflow exercise](local-core-checkpoint.md).
+The remaining milestones are proposed. The running production stack is unchanged.
 It builds on the quick-win branch; it does not require rewriting project history.
 
 ## Goals and operating model

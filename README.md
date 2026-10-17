@@ -4,6 +4,11 @@ A Fabric Minecraft server deployed with Docker Compose, with Restic backups to
 Cloudflare R2 and optional access to management tools over Tailscale. Infrastructure
 provisioning currently targets Hetzner Cloud through OpenTofu.
 
+The replacement architecture is being implemented incrementally. Start with the
+[local-core code review and workflow exercise](docs/local-core-checkpoint.md).
+Its controller uses a separate Compose file; the commands below describe the
+existing production stack.
+
 ## Components
 
 - **Game:** Fabric, online authentication, enforced whitelist, voice/webcam mods.

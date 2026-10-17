@@ -1,0 +1,54 @@
+services:
+  minecraft:
+    image: ${SMP_IMAGE:?Use bin/smp}
+    stop_grace_period: 2m
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "127.0.0.1:${SMP_GAME_PORT:?Use bin/smp}:25565/tcp"
+    environment:
+      EULA: "TRUE"
+      TYPE: FABRIC
+      UID: ${SMP_UID:?Use bin/smp}
+      GID: ${SMP_GID:?Use bin/smp}
+      VERSION: ${SMP_MC_VERSION:?Use bin/smp}
+      FABRIC_LOADER_VERSION: ${SMP_FABRIC_LOADER:?Use bin/smp}
+      FABRIC_LAUNCHER_VERSION: ${SMP_FABRIC_INSTALLER:?Use bin/smp}
+      ONLINE_MODE: "TRUE"
+      LEVEL: world
+      MOTD: ${SMP_INSTANCE:?Use bin/smp} local Fabric baseline
+      MEMORY: ${SMP_HEAP:?Use bin/smp}
+      MAX_PLAYERS: "5"
+      VIEW_DISTANCE: "8"
+      SIMULATION_DISTANCE: "6"
+      ENABLE_WHITELIST: ${SMP_ENABLE_WHITELIST:?Use bin/smp}
+      ENFORCE_WHITELIST: "TRUE"
+      WHITELIST: ${SMP_PLAYERS:-}
+      EXISTING_WHITELIST_FILE: SYNCHRONIZE
+      ENABLE_RCON: "TRUE"
+      RCON_PASSWORD_FILE: /run/secrets/rcon_password
+    secrets:
+      - rcon_password
+    volumes:
+      - type: bind
+        source: ${SMP_DATA_DIR:?Use bin/smp}
+        target: /data
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
+    mem_limit: ${SMP_MEMORY_LIMIT:?Use bin/smp}
+
+secrets:
+  rcon_password:
+    file: ${SMP_RCON_FILE:?Use bin/smp}
