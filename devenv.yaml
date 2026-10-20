@@ -1,0 +1,9 @@
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+allow_unfree: true
+
+secretspec:
+  enable: true
+  provider: protonpass
+  profile: default # profile from secretspec.toml
