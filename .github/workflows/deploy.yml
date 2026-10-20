@@ -82,30 +82,34 @@ jobs:
           echo "Waiting for $TS_HOST to register on Tailnet..."
           # TS_HOST is expanded by the child shell.
           # shellcheck disable=SC2016
-          timeout 300s bash -c '
-            until tailscale ip -4 "$TS_HOST" >/dev/null 2>&1; do
-              echo "Server not found yet. Retrying in 10 seconds..."
+          if ! timeout 300s bash -e -c '
+            until TS_IP=$(tailscale ip -4 "$TS_HOST"); do
+              echo "Tailscale lookup failed for $TS_HOST. Retrying in 10 seconds..." >&2
               sleep 10
             done
-          '
-          TS_IP=$(tailscale ip -4 "$TS_HOST")
-          echo "TS_IP=$TS_IP" >> "$GITHUB_ENV"
+            echo "TS_IP=$TS_IP" >> "$GITHUB_ENV"
+          '; then
+            echo "::error::Could not resolve $TS_HOST. Check the mc-prod TS_HOST variable, server registration, and tag:ci access to tag:server."
+            tailscale status || true
+            exit 1
+          fi
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_REPO: ${{ github.server_url }}/${{ github.repository }}.git
         with:
           host: ${{ env.TS_IP }}
           username: ${{ vars.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: SOPS_AGE_KEY,DEPLOY_SHA
+          envs: SOPS_AGE_KEY,DEPLOY_SHA,DEPLOY_REPO
           command_timeout: 30m
           script: |
             set -eu
             APP_DIR="$HOME/app"
-            REPO="https://github.com/Qwacktuz/minecraft-smp.git"
+            : "${DEPLOY_REPO:?Deployment repository is required}"
 
             sudo cloud-init status --wait
             mkdir -p "$APP_DIR"
@@ -114,8 +118,9 @@ jobs:
             cd "$APP_DIR"
 
             if [ ! -d .git ]; then
-              git clone "$REPO" .
+              git clone "$DEPLOY_REPO" .
             fi
+            git remote set-url origin "$DEPLOY_REPO"
             git fetch origin "$DEPLOY_SHA"
             git reset --hard "$DEPLOY_SHA"
             APP_DIR="$APP_DIR" bash scripts/deploy.sh
