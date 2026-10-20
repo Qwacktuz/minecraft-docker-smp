@@ -167,6 +167,7 @@ services:
         #fabricexporter # No 26.3 release candidate yet
         #fabric-permissions-api
 
+        asynclogger
         spark
         #krypton
         ferrite-core
