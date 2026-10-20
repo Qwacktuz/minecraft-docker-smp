@@ -40,6 +40,7 @@ write_files:
       PubkeyAuthentication yes
 
 runcmd:
+  - set -e
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
 
   # Apply Sysctl settings
@@ -49,14 +50,9 @@ runcmd:
   - curl -fsSL https://tailscale.com/install.sh | sh
   - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
   - systemctl restart tailscaled
-  # - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
-
-  - |
-    for i in {1..5}; do
-      tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --advertise-tags=tag:server --reset && break
-      echo "Tailscale failed to connect, retrying in 10 seconds..."
-      sleep 10
-    done
+  - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
+  - tailscale status
+  - which tailscale
 
   # Install Docker via official script
   - curl -fsSL https://get.docker.com | sh

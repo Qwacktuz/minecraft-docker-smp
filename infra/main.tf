@@ -3,14 +3,6 @@ resource "hcloud_ssh_key" "deploy_key" {
   public_key = var.ssh_public_key
 }
 
-# Fetch the current runner's IP for dynamic provisioning
-# In case I change product etc.
-# FIXME: should be changed if using CI/CD pipeline
-# But works for now since I am pushing updates from my local machine
-# data "http" "runner_ip" {
-#   url = "https://ipv4.icanhazip.com"
-# }
-
 # Generate a one-time ephemeral Tailscale Auth key using OAuth credentials
 resource "tailscale_tailnet_key" "server_key" {
   reusable      = true
