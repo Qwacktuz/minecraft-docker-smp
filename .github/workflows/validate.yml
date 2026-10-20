@@ -40,6 +40,7 @@ jobs:
           tofu fmt -check
           tofu init -backend=false -lockfile=readonly
           tofu validate
+          tofu test
 
       - name: Validate Alloy configuration with the deployed image
         run: |

@@ -27,11 +27,17 @@ data "tailscale_devices" "minecraft" {
 }
 
 locals {
-  minecraft_device = try(one(data.tailscale_devices.minecraft.devices), null)
-  minecraft_tailscale_ipv4 = [
+  # The provider models devices as a nested block: before a deferred read it
+  # appears empty rather than unknown. The computed ID stays unknown until the
+  # API read completes, so use it to defer validation until apply.
+  minecraft_lookup_complete = data.tailscale_devices.minecraft.id != null
+  minecraft_device          = try(one(data.tailscale_devices.minecraft.devices), null)
+  # Distinct pending values keep the planned IP and node ID unknown instead of
+  # fixing them to empty values before the API read has run.
+  minecraft_tailscale_ipv4 = local.minecraft_lookup_complete ? [
     for address in try(local.minecraft_device.addresses, []) : address
     if try(cidrcontains("100.64.0.0/10", address), false)
-  ]
+  ] : [""]
 }
 
 # The provider has no managed device resource. Persist the exact node ID and
@@ -39,7 +45,7 @@ locals {
 # Do not use create_before_destroy: the old identity must be removed first.
 resource "terraform_data" "minecraft_tailnet" {
   input = {
-    device_id = try(local.minecraft_device.node_id, null)
+    device_id = local.minecraft_lookup_complete ? try(local.minecraft_device.node_id, null) : ""
     hostname  = var.server_name
     server_id = hcloud_server.minecraft.id
   }
@@ -57,15 +63,19 @@ resource "terraform_data" "minecraft_tailnet" {
 
   lifecycle {
     precondition {
-      condition     = length(data.tailscale_devices.minecraft.devices) == 1
+      condition     = local.minecraft_lookup_complete
+      error_message = "The Tailscale device lookup did not complete."
+    }
+    precondition {
+      condition     = local.minecraft_lookup_complete ? length(data.tailscale_devices.minecraft.devices) == 1 : true
       error_message = "Expected exactly one Minecraft Tailscale device. For a missing existing VPS, host re-enrollment is required; for duplicates, resolve the hostname conflict."
     }
     precondition {
-      condition     = try(local.minecraft_device.authorized && contains(local.minecraft_device.tags, "tag:server"), false)
+      condition     = local.minecraft_lookup_complete ? try(local.minecraft_device.authorized && contains(local.minecraft_device.tags, "tag:server"), false) : true
       error_message = "The Minecraft device must be authorized and tagged tag:server."
     }
     precondition {
-      condition     = length(local.minecraft_tailscale_ipv4) == 1
+      condition     = local.minecraft_lookup_complete ? length(local.minecraft_tailscale_ipv4) == 1 : true
       error_message = "The Minecraft device must have exactly one Tailscale IPv4 address."
     }
   }
