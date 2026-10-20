@@ -5,6 +5,16 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Infrastructure operation
+        type: choice
+        options: [apply, destroy]
+        default: apply
+      destroy_confirmation:
+        description: "For destroy only: type the server hostname. This deletes the VPS and its world disk."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -22,6 +32,8 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     environment: mc-prod
+    outputs:
+      tailscale_ipv4: ${{ steps.infrastructure.outputs.tailscale_ipv4 }}
     defaults:
       run:
         working-directory: ./infra
@@ -33,6 +45,7 @@ jobs:
 
       TF_VAR_ts_tailnet: ${{ vars.TS_TAILNET }}
       TF_VAR_username: ${{ vars.USERNAME }}
+      TF_VAR_server_name: ${{ vars.TS_HOST || 'mc-prod' }}
 
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -45,22 +58,45 @@ jobs:
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.12.3
+          tofu_wrapper: false
 
-      - name: OpenTofu Init & Apply
+      - name: OpenTofu Init and Lifecycle
+        id: infrastructure
+        env:
+          OPERATION: ${{ inputs.operation || 'apply' }}
+          DESTROY_CONFIRMATION: ${{ inputs.destroy_confirmation }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
+          if [[ "$OPERATION" == destroy && "$DESTROY_CONFIRMATION" != "$TF_VAR_server_name" ]]; then
+            echo "::error::Destroy requires the exact server hostname as confirmation."
+            exit 1
+          fi
+          if [[ "$OPERATION" != apply && "$OPERATION" != destroy ]]; then
+            echo "::error::Unsupported infrastructure operation."
+            exit 1
+          fi
           tofu init \
-            -backend-config="bucket=${{ secrets.R2_BUCKET_NAME }}" \
-            -backend-config="endpoint=${{ secrets.R2_ENDPOINT }}" \
-            -backend-config="access_key=${{ secrets.R2_ACCESS_KEY_ID }}" \
-            -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" \
+            -input=false -lockfile=readonly \
+            -backend-config="bucket=$R2_BUCKET_NAME" \
+            -backend-config="endpoint=$R2_ENDPOINT" \
             -backend-config="skip_credentials_validation=true" \
             -backend-config="skip_region_validation=true"
-           tofu apply -auto-approve
+          if [[ "$OPERATION" == destroy ]]; then
+            tofu destroy -input=false -auto-approve
+          else
+            tofu apply -input=false -auto-approve
+            TS_IP=$(tofu output -raw tailscale_ipv4)
+            echo "tailscale_ipv4=$TS_IP" >> "$GITHUB_OUTPUT"
+          fi
 
   # -- Application (Docker Compose) ---
   deploy:
     name: Deploy Application
     needs: terraform
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.operation != 'destroy' }}
     runs-on: ubuntu-latest
     environment: mc-prod
     steps:
@@ -74,22 +110,22 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags: tag:ci
 
-      - name: Resolve Server Tailscale IP
+      - name: Wait for Server Tailscale Connectivity
         env:
-          TS_HOST: ${{ vars.TS_HOST }}
+          TS_IP: ${{ needs.terraform.outputs.tailscale_ipv4 }}
         run: |
-          : "${TS_HOST:?Set the TS_HOST repository variable}"
-          echo "Waiting for $TS_HOST to register on Tailnet..."
-          # TS_HOST is expanded by the child shell.
+          : "${TS_IP:?OpenTofu must return the registered server address}"
+          echo "Waiting for the registered Minecraft device to become reachable..."
+          # TS_IP is expanded by the child shell.
           # shellcheck disable=SC2016
           if ! timeout 300s bash -e -c '
-            until TS_IP=$(tailscale ip -4 "$TS_HOST"); do
-              echo "Tailscale lookup failed for $TS_HOST. Retrying in 10 seconds..." >&2
+            until tailscale ping --timeout=5s --c=1 "$TS_IP"; do
+              echo "Tailscale connectivity failed. Retrying in 10 seconds..." >&2
               sleep 10
             done
             echo "TS_IP=$TS_IP" >> "$GITHUB_ENV"
           '; then
-            echo "::error::Could not resolve $TS_HOST. Check the mc-prod TS_HOST variable, server registration, and tag:ci access to tag:server."
+            echo "::error::Registered Minecraft device is unreachable. Check server health and tag:ci access to tag:server."
             tailscale status || true
             exit 1
           fi

@@ -46,7 +46,8 @@ This starts a new world when `data/minecraft` is empty. For recovery, follow
 ## Deployment
 
 The production workflow runs on pushes to `main` or manual dispatch. It serializes
-runs, requires validation to pass, applies infrastructure, joins Tailscale as `tag:ci`, waits for cloud-init,
+runs, requires validation to pass, applies infrastructure and waits for server
+Tailscale registration, joins Tailscale as `tag:ci`, waits for cloud-init,
 locks deployment on the host, and checks out the triggering Git commit.
 
 `scripts/deploy.sh` decrypts secrets into a private temporary file, validates the

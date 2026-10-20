@@ -11,13 +11,15 @@ resource "hcloud_ssh_key" "deploy_key" {
 #   url = "https://ipv4.icanhazip.com"
 # }
 
-# Generate a one-time ephemeral Tailscale Auth key using OAuth credentials
+# Refresh consumed/expired bootstrap keys before provisioning another server.
+# Keep registered servers persistent; terraform_data.minecraft_tailnet owns removal.
 resource "tailscale_tailnet_key" "server_key" {
-  reusable      = false
-  ephemeral     = false
-  preauthorized = true
-  expiry        = 3600           # 1 hour for bootstrap
-  tags          = ["tag:server"] # scuffed ACL fix later
+  reusable            = false
+  ephemeral           = false
+  preauthorized       = true
+  recreate_if_invalid = "always"
+  expiry              = 3600
+  tags                = ["tag:server"]
 }
 
 # Prepare the cloud-init config using the cloudinit provider
