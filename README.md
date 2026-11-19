@@ -41,6 +41,8 @@ the Tailscale app, and your Age key in `SOPS_AGE_KEY_FILE` (default
 - **`minecraft-service`**: Fabric 26.3 with online authentication, an enforced
   whitelist, and the mod list in `MODRINTH_PROJECTS`. Public ports: game 25565/tcp,
   Simple Voice Chat 24454/udp, webcam 25454/udp. RCON is not published.
+  On ARM64 hosts (e.g. Apple Silicon) `deploy.sh` uses Aikar's JVM flags instead
+  of MeowIce's, which crash the JVM there.
 - **`backup`**: `itzg/mc-backup` with Restic. It backs up hourly, pausing when
   no players are online, and prunes old snapshots.
 

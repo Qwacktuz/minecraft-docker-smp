@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased: fresh-host fixes, ARM64 and verified round trips (2026-11-19)
+
+- Fresh VPS: cloud-init installs Docker before Tailscale. Tailscale SSH sessions
+  only get the groups that existed when tailscaled started.
+- `start vps` waits for cloud-init in its own session. It restores whenever the
+  VPS has no world, and `deploy.sh` refuses to start without a world unless
+  `NEW_WORLD=1`.
+- ARM64 hosts (Apple Silicon under OrbStack) use Aikar's JVM flags. MeowIce's
+  flags crash Temurin 25's C2 compiler there.
+- Ported the `asynclogger` mod from the old `main`. CI actions bumped
+  (checkout v7, cachix-action v17).
+- Deleted the unused GitHub `mc-prod` environment and all of its secrets and
+  variables. GitHub now holds no secrets for this repo.
+- Verified live: VPS stop → fresh VPS restore, and VPS stop → local
+  (OrbStack) restore → local stop. Each stop saved a backup to R2 and verified it.
+
 ## Unreleased: simplified to the game and its backups (2026-11-19)
 
 - Removed the monitoring stack (Grafana, Prometheus, Loki, Alloy), Arcane,
