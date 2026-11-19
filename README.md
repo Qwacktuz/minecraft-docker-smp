@@ -80,11 +80,33 @@ docker compose exec backup backup now
 docker compose exec backup restic snapshots
 ```
 
+## Backups and their safety net
+
+On the VPS, `stop` does these in order, and stops at any failure with the VPS still running:
+1. Takes a backup.
+2. Checks it reached R2.
+3. Runs `restic check` on 2% of the data. The VPS disk is the only other copy of
+   the world, so it isn't deleted while the backups look damaged.
+4. Shuts down and publishes `world.zip`.
+5. Deletes the VPS.
+6. Copies the backup repository into the **vault** bucket from your laptop. That
+   needs `rclone`, which devenv provides.
+
+The vault only ever gains files. R2 bucket locks keep them for 30 days, and the VPS
+has no key for it, so even a compromised server can't destroy the backups. Copy
+again any time with `server vault`. Restoring from the vault:
+[docs/how2backuprestore.md](docs/how2backuprestore.md#restore-from-the-vault).
+
 ## Secrets
 
-Everything is SOPS/Age-encrypted in `secrets/`: `infra.enc.env` for OpenTofu and
-`app.enc.env` for Compose. Edit them with `sops secrets/<file>`. Nothing secret is
-stored anywhere else, and CI needs none. Details: [infra/README.md](infra/README.md#secrets).
+Everything is SOPS/Age-encrypted in `secrets/`: `infra.enc.env` (laptop only:
+OpenTofu, the state bucket, the vault) and `app.enc.env` (Compose, the VPS
+backups). Edit them with `sops secrets/<file>`. Nothing secret is stored anywhere
+else, and CI needs none. Each Cloudflare token reaches only its own buckets:
+[infra/README.md](infra/README.md#cloudflare-tokens-and-buckets).
+
+Every image is pinned to a version plus digest (`compose.yml`, `scripts/lib.sh`),
+and so are CI's actions and devenv. Updates happen only when you bump them.
 
 ## Development environment
 
@@ -109,7 +131,8 @@ tests use mocks and dummy credentials.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
 - `scripts/restore-backup.sh`, `restore-regions.sh`, `rollback-backup.sh`,
-  `test-backup.sh`: manual backup tools, run on the app host.
+  `test-backup.sh`: manual backup tools, run on the app host. They share
+  `scripts/lib.sh` (pinned images, and restic with secrets passed by name).
 - `compose.yml`, `static/icon.png`: the game and its backups.
 - `infra/`: Hetzner VPS, firewall, DNS, Tailscale bootstrap, cloud-init.
 - `secrets/`: SOPS-encrypted settings.

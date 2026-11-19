@@ -25,15 +25,36 @@ All secrets are SOPS/Age-encrypted in `secrets/`, and nothing else holds them:
 
 | File | Holds | Read by |
 |---|---|---|
-| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-backend keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT` | `bin/server`, via `sops exec-env`, only for each tofu process |
-| `secrets/app.enc.env` | Compose settings: RCON, whitelist/ops, Restic and its R2 keys, `PUBLIC_WORLD_BUCKET` (the world download) | `scripts/deploy.sh`, which writes the private `.env` |
+| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-bucket keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT`, `VAULT_*` vault keys | the laptop only: `bin/server`, via `sops exec-env`, per command |
+| `secrets/app.enc.env` | Compose settings: RCON, whitelist/ops, Restic and its R2 keys, `PUBLIC_WORLD_BUCKET` (the world download) | `scripts/deploy.sh` on the VPS (or a local copy), which writes the private `.env` |
 
-Edit either with `sops secrets/<file>`; to add a secret, add a line there, nothing
-else. Plain `NAME=value` dotenv format. The R2 S3 secret is the SHA-256 of the
-Cloudflare API token it belongs to: rolling that token changes the R2 secret in
-both files. GitHub Actions only validates and needs
-no secrets. The VPS never stores the Age key: `bin/server` passes it over SSH stdin
-for each deploy.
+Edit either with `sops secrets/<file>`, in plain `NAME=value` dotenv format, with
+no spaces around `=`. To add a secret, add a line there, nothing else. GitHub
+Actions only validates and needs no secrets. The VPS never stores the Age key:
+`bin/server` passes it over SSH stdin for each deploy.
+
+### Cloudflare tokens and buckets
+
+Each token reaches only what it needs. The VPS can never touch the state or the
+vault.
+
+| Token | Can access | Stored as |
+|---|---|---|
+| DNS (account API token) | Zone Read + DNS Edit on cactuz.dev | `TF_VAR_cloudflare_api_token` (infra) |
+| R2 state | `cactuz-mc-tofu-state` | `AWS_*` (infra) |
+| R2 VPS | `cactuz-mc-backups`, `cactuz-mc-world` | `R2_*` (app) |
+| R2 vault | `cactuz-mc-vault` | `VAULT_*` (infra) |
+
+- **`cactuz-mc-backups`**: the Restic repository.
+- **`cactuz-mc-world`**: public, at `world.cactuz.dev`.
+- **`cactuz-mc-tofu-state`**: the OpenTofu state, locked during runs (`use_lockfile`).
+- **`cactuz-mc-vault`**: a copy of the backups. R2 bucket lock rules keep
+  `data/`, `index/`, `keys/` and `snapshots/` for 30 days, so not even a stolen VPS
+  key can delete them.
+
+The R2 tokens are object read & write and expire after a year; renew them before
+then. A renewed R2 token comes with a new key ID and secret, which go into the
+same variables.
 
 ## Local validation and administration
 

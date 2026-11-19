@@ -54,6 +54,27 @@ after rollback and verify health before reopening the server.
 restores the newest snapshot before the server starts. That is the normal way to
 move the world; use the manual steps above only to recover an *older* snapshot.
 
+## Restore from the vault
+
+If the backup bucket is ever damaged or emptied, the vault (`cactuz-mc-vault`) holds
+a full copy of the repository with the same password. On the laptop:
+
+```bash
+sops exec-env secrets/infra.enc.env 'sops exec-env secrets/app.enc.env "
+  RESTIC_REPOSITORY=s3:\$R2_ENDPOINT/cactuz-mc-vault \
+  AWS_ACCESS_KEY_ID=\$VAULT_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=\$VAULT_SECRET_ACCESS_KEY \
+  restic --no-lock -o s3.region=auto snapshots"'
+```
+
+To restore from it, copy it back with `rclone`, or point a restore at it the same
+way. The vault never deletes anything, so it also holds snapshots that retention
+has already removed from the backup bucket.
+
+## Checking the backups
+
+`server stop` checks 2% of the data every time. For a deeper check, run
+`bash scripts/test-backup.sh 25` on the VPS (it reads 25% of the data).
+
 Only the VPS runs the backup service, so the `docker compose exec backup ...`
 commands above work there only. A local copy (`start local`) is read-only and never
 creates snapshots. To undo a chunk prune, use the `pre-prune` snapshots; see

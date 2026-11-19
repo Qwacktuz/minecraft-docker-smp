@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased: hardening (2026-11-19)
+
+- **Least-privilege Cloudflare tokens.** DNS, OpenTofu state, VPS (backups and
+  world.zip) and vault each have their own token, and each was tested against
+  every bucket. The OpenTofu state moved to its own bucket, with state locking.
+- **Vault.** After each VPS stop, the laptop copies the backup repository into
+  `cactuz-mc-vault`, whose bucket lock rules refuse deletes for 30 days. The VPS
+  has no key for it. Verified: complete copy, restic opens it, delete refused.
+- **Integrity check.** `stop` runs `restic check --read-data-subset 2%` before
+  deleting the VPS, and aborts if it fails.
+- **Pinned versions.** All images are pinned by tag and digest (`compose.yml`,
+  `scripts/lib.sh`); so are CI's actions (commit SHAs) and devenv (v2.4.0).
+- **Scripts.** All of them share `scripts/lib.sh`, pass secrets by name
+  (`-e NAME`), never on the command line, and pass ShellCheck.
+- **Cloud-init.** Docker and Tailscale install from their signed apt
+  repositories with embedded keys (`infra/keys/`) instead of `curl | sh`, and
+  SOPS is checksum-verified for amd64 and arm64.
+
 ## Unreleased: public world download (2026-11-19)
 
 - `bin/server stop` on the VPS publishes `world.zip`, without `players/`, to a
