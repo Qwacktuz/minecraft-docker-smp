@@ -42,6 +42,10 @@ if name == "sops" and args[:1] == ["exec-env"]:
 if name == "tofu":
     if "TF_VAR_hcloud_token" not in os.environ:
         sys.exit("tofu ran without the decrypted infra secrets")
+    if "state" in args and os.environ.get("STATE") == "missing":
+        sys.exit("Error: No state file was found")
+    if "state" in args and os.environ.get("STATE") == "broken":
+        sys.exit("Error: AccessDenied")
     if "state" in args and flag("VPS"):
         print("hcloud_server.minecraft")
     if "output" in args:
@@ -244,6 +248,14 @@ class ServerTests(unittest.TestCase):
                 if due:
                     self.assertLess(self.find(calls, "scripts/prune.sh")[0],
                                     self.find(calls, "destroy")[0])
+
+    def test_missing_state_means_no_vps_but_a_broken_read_stops(self):
+        result, _ = self.run_server("status", STATE="missing")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Stopped", result.stdout)
+        result, _ = self.run_server("status", STATE="broken")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not read the OpenTofu state", result.stderr)
 
     def test_stop_with_nothing_running_is_a_no_op(self):
         result, calls = self.run_server("stop")

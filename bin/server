@@ -49,8 +49,13 @@ tf_init() {
 vps_exists() {
   local resources
   tf_init
-  # A failed state read must stop us, never look like "no VPS".
-  resources=$(tf state list) || die "could not read the OpenTofu state"
+  # A failed state read must stop us, never look like "no VPS". A state that
+  # doesn't exist yet (a fresh state bucket) means no VPS.
+  if ! resources=$(tf state list 2>&1); then
+    grep -q "No state file was found" <<< "$resources" && return 1
+    echo "$resources" >&2
+    die "could not read the OpenTofu state"
+  fi
   grep -qx hcloud_server.minecraft <<< "$resources"
 }
 
