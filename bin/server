@@ -88,12 +88,16 @@ from datetime import datetime
 def epoch(t):
     t = re.sub(r"\.\d+", "", t).replace("Z", "+00:00")  # drop nanoseconds
     return int(datetime.fromisoformat(t).timestamp())
-snaps = sorted(((epoch(s["time"]), s["id"]) for s in json.load(sys.stdin)), reverse=True)
+try:
+    snaps = sorted(((epoch(s["time"]), s["id"]) for s in json.load(sys.stdin)), reverse=True)
+except ValueError:  # restic printed an error instead of JSON
+    sys.exit(1)
 if not snaps: sys.exit(1)
 for time, id in snaps: print(time, id)'
 }
 # `restic` runs inside the VPS backup container, limited to the VPS snapshots.
-vps_restic() { on vps "docker compose exec -T backup restic $* --host $WORLD_HOST"; }
+# It waits for locks, e.g. while the container checks the repository at startup.
+vps_restic() { on vps "docker compose exec -T backup restic --retry-lock 2m $* --host $WORLD_HOST"; }
 
 # Backs up the VPS world now and checks that the snapshot reached R2. Sets
 # SNAPSHOT_ID. The game keeps running if anything fails.

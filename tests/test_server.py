@@ -33,7 +33,7 @@ def snapshots():
             tagged.append({"id": "abc", "time": os.environ["SNAP_TIME"]})
         print(json.dumps(tagged))
     else:
-        print(json.dumps([{"id": "abc", "time": os.environ["SNAP_TIME"]}]))
+        print(os.environ.get("SNAP_JSON") or json.dumps([{"id": "abc", "time": os.environ["SNAP_TIME"]}]))
 
 if name == "sops" and args[:1] == ["exec-env"]:
     # Like sops: run the command through a shell with the "decrypted" values.
@@ -60,7 +60,7 @@ elif name == "ssh":
         print(int(time.time()))
     if "backup now" in command and flag("BACKUP_FAIL"):
         sys.exit(1)
-    if "restic snapshots" in command:
+    if "restic" in command and " snapshots " in command + " ":
         snapshots()
     if "tag --add pre-prune" in command:
         Path(os.environ["MOCK_LOG"] + ".tagged").touch()
@@ -132,6 +132,12 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(self.find(calls, "compose down"))
         self.assertFalse(self.find(calls, "destroy"))
 
+    def test_restic_errors_are_not_tracebacks(self):
+        result, _ = self.run_server("status", VPS="1", SNAP_JSON="not json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Latest backup: unknown", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_stop_aborts_when_snapshot_is_stale(self):
         result, calls = self.run_server("stop", VPS="1", SNAP_TIME=iso(-3600))
         self.assertNotEqual(result.returncode, 0)
@@ -172,7 +178,9 @@ class ServerTests(unittest.TestCase):
 
     def test_backup_checks_only_read_vps_snapshots(self):
         _, calls = self.run_server("stop", VPS="1")
-        for i in self.find(calls, "restic snapshots"):
+        checks = self.find(calls, "snapshots")
+        self.assertTrue(checks)
+        for i in checks:
             self.assertIn("--host mc-backup-worker", " ".join(calls[i]["argv"]))
 
     def test_prune_backs_up_tags_and_restarts_around_the_prune(self):

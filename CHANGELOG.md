@@ -22,7 +22,12 @@
 - Verified on a local copy of the real world: start local restored with no
   backup container; a dry run; a real prune (region files went from 3.1 GB to
   0.45 GB); a healthy restart; stop. R2 was unchanged afterwards (same latest
-  snapshot, no locks).
+  snapshot, no locks). On a fresh VPS: the backup service ran, a dry run
+  gave the same counts, and stop verified its backup and deleted the VPS. The real
+  VPS prune (tagging, stop, prune, restart) is covered by mocked tests only, so it
+  doesn't change the real world before you have reviewed it.
+- `bin/server` waits up to 2 minutes for restic locks, and shows "unknown"
+  instead of a traceback when restic fails.
 
 ## Unreleased: fresh-host fixes, ARM64 and verified round trips (2026-11-19)
 
