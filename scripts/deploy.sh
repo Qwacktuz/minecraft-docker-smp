@@ -9,7 +9,7 @@ ENV_FILE=$(mktemp "$APP_DIR/.env.XXXXXX")
 trap 'rm -f -- "$ENV_FILE"' EXIT
 
 echo "Preparing runtime configuration..."
-sops --decrypt --output-type dotenv secrets/secrets.enc.env > "$ENV_FILE"
+sops --decrypt --output-type dotenv secrets/app.enc.env > "$ENV_FILE"
 if [[ ! -s "$ENV_FILE" ]]; then
   echo "ERROR: SOPS produced an empty environment file." >&2
   exit 1

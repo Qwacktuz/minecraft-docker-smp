@@ -5,6 +5,7 @@
 #   bin/server start vps     create the Hetzner VPS and run the world there
 #   bin/server stop          final backup to R2, shut down, delete the VPS
 #   bin/server status        where is the world running?
+#   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
 #
 # There is one world. It lives in R2 (Restic) between runs: `stop` only shuts
 # down after a fresh backup is verified, and `start` restores the newest one.
@@ -24,15 +25,21 @@ need() { for tool; do command -v "$tool" >/dev/null || die "'$tool' is not insta
 
 # --- OpenTofu (VPS lifecycle) ------------------------------------------------
 
-# Provider/backend credentials come from infra/.env (also loaded by direnv).
-# shellcheck disable=SC1091
-if [[ -f infra/.env ]]; then set -a; . infra/.env; set +a; fi
-
-tf() { tofu -chdir="$ROOT/infra" "$@"; }
+# Provider and state-backend credentials live encrypted in secrets/infra.enc.env.
+# They are decrypted only into the environment of each tofu process.
+INFRA_SECRETS="$ROOT/secrets/infra.enc.env"
+tf() {
+  need sops tofu
+  sops exec-env "$INFRA_SECRETS" "$(printf '%q ' tofu -chdir="$ROOT/infra" "$@")"
+}
 TF_READY=
 tf_init() {
   [[ -n "$TF_READY" ]] && return
-  tf init -input=false -backend-config=backend.conf >/dev/null || die "tofu init failed"
+  need sops tofu
+  # $TOFU_BACKEND_* are expanded inside exec-env, from the decrypted file.
+  # shellcheck disable=SC2016
+  sops exec-env "$INFRA_SECRETS" "$(printf '%q ' tofu -chdir="$ROOT/infra" init -input=false -reconfigure)"' -backend-config="bucket=$TOFU_BACKEND_BUCKET" -backend-config="endpoint=$TOFU_BACKEND_ENDPOINT"' \
+    >/dev/null || die "tofu init failed"
   TF_READY=1
 }
 vps_exists() {
@@ -194,13 +201,14 @@ status() {
   fi
 }
 
-usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
   "stop "*) stop ;;
   "status "*) status ;;
+  "tofu "*) shift; tf_init; tf "$@" ;;
   "-h "* | "--help "* | "help "*) usage ;;
   *) usage 1 >&2 ;;
 esac

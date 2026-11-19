@@ -29,7 +29,8 @@
   languages.python.enable = true; # scripts/smp.py and tests need Python 3.11+
   languages.opentofu.enable = true;
 
-  # Secrets are never loaded into the shell; bin/server reads what it needs.
+  # Secrets are never loaded into the shell: they stay SOPS-encrypted in secrets/
+  # and are decrypted per command (bin/server, scripts/deploy.sh).
   dotenv.disableHint = true;
 
   enterShell = ''

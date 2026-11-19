@@ -20,16 +20,19 @@ Tailscale, UFW, and other host packages.
   offline for a while, so a VPS cut off from Tailscale for a long time loses tailnet access.
 - Cloud-init advertises an exit node; approve/use that only if intentional.
 
-## Credentials
+## Secrets
 
-`bin/server` runs OpenTofu from your laptop. Provider credentials come from
-`infra/local.auto.tfvars` and `infra/.env`; the R2 state backend from
-`infra/backend.conf` plus the `AWS_*` keys in `infra/.env`. None of these files
-are committed. GitHub Actions only validates and needs no secrets.
+All secrets are SOPS/Age-encrypted in `secrets/`, and nothing else holds them:
 
-Runtime application settings are separately encrypted in `secrets/secrets.enc.env`.
-The R2 credentials there need not be the same as the infrastructure-backend credentials.
-Use the least privilege each role requires and retain recovery keys independently.
+| File | Holds | Read by |
+|---|---|---|
+| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-backend keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT` | `bin/server`, via `sops exec-env`, only for each tofu process |
+| `secrets/app.enc.env` | Compose settings: RCON, Grafana, Arcane, Restic, whitelist | `scripts/deploy.sh`, which writes the private `.env` |
+
+Edit either with `sops secrets/<file>`; to add a secret, add a line there, nothing
+else. Plain `NAME=value` dotenv format. GitHub Actions only validates and needs
+no secrets. The VPS never stores the Age key: `bin/server` passes it over SSH stdin
+for each deploy.
 
 ## Local validation and administration
 
@@ -41,17 +44,16 @@ tofu fmt -check
 tofu validate
 ```
 
-For actual administration, provide the required `TF_VAR_*` variables from
-`variables.tf` and initialize the R2 backend using your private backend configuration.
-Keep credential files out of Git. Review `tofu plan` before applying changes.
+Run OpenTofu by hand with the encrypted credentials through `bin/server tofu`
+(it initializes the R2 backend first), e.g. `bin/server tofu plan`. Review a plan
+before applying changes outside `bin/server start`/`stop`.
 
-The deployment workflow still auto-applies infrastructure. `prevent_destroy` is
-currently false, world data lives on the VPS disk, and backend locking is not yet
-configured. GitHub concurrency reduces overlapping workflow runs; it does not lock
-out manual OpenTofu runs. Do not use destroy/apply as a routine migration procedure.
+`prevent_destroy` is false because `bin/server stop` deletes the VPS on purpose,
+after a verified backup. Backend locking is not yet configured, so don't run
+manual OpenTofu commands while `bin/server` is running.
 
 `ignore_changes = [user_data]` means editing cloud-init does not patch an existing
-host. Bootstrap currently downloads an AMD64 SOPS binary. Host replacement,
-ARM support, and ongoing OS configuration require additional work.
+host. Bootstrap currently downloads an AMD64 SOPS binary. ARM support and ongoing
+OS configuration require additional work.
 
 See [backup and restore](../docs/how2backuprestore.md) before any replacement.

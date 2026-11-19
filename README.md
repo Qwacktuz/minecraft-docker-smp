@@ -73,8 +73,8 @@ The R2 backups and the OpenTofu state are separate and are never deleted.
 **Laptop requirements:** [devenv](https://devenv.sh) provides every tool
 (see [Development environment](#development-environment)). Outside it you need
 a running Docker daemon (OrbStack or Docker Desktop), the Tailscale app, and your
-Age key in `SOPS_AGE_KEY_FILE` (default `~/.config/sops/age/keys.txt`). OpenTofu credentials come from
-`infra/.env`, `infra/local.auto.tfvars` and `infra/backend.conf`.
+Age key in `SOPS_AGE_KEY_FILE` (default `~/.config/sops/age/keys.txt`). Every secret
+is SOPS-encrypted in `secrets/` (see [infra/README.md](infra/README.md#secrets)).
 `start vps` deploys the current commit from GitHub, so push it first.
 
 Under the hood: `bin/server` runs `tofu apply`/`destroy` and calls

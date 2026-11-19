@@ -14,7 +14,7 @@ import unittest
 SERVER = Path(__file__).resolve().parents[1] / "bin/server"
 AGE_KEY = "AGE-SECRET-KEY-1TESTONLYNOTAREALKEY"
 MOCK = r'''
-import json, os, sys, time
+import json, os, subprocess, sys, time
 from pathlib import Path
 
 name = Path(sys.argv[0]).name
@@ -28,7 +28,13 @@ command = " ".join(args)
 def snapshots():
     print(json.dumps([{"id": "abc", "time": os.environ["SNAP_TIME"]}]))
 
+if name == "sops" and args[:1] == ["exec-env"]:
+    # Like sops: run the command through a shell with the "decrypted" values.
+    secrets = {"TOFU_BACKEND_BUCKET": "state-bucket", "TF_VAR_hcloud_token": "decrypted"}
+    sys.exit(subprocess.call(["sh", "-c", args[2]], env=dict(os.environ, **secrets)))
 if name == "tofu":
+    if "TF_VAR_hcloud_token" not in os.environ:
+        sys.exit("tofu ran without the decrypted infra secrets")
     if "state" in args and flag("VPS"):
         print("hcloud_server.minecraft")
     if "output" in args:
@@ -176,6 +182,17 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         deploy = calls[self.find(calls, "deploy.sh")[0]]["argv"]
         self.assertIn("RESTORE=", deploy)
+
+    def test_tofu_gets_secrets_only_through_sops(self):
+        result, calls = self.run_server("tofu", "plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        init = next(c["argv"] for c in calls if c["argv"][0] == "tofu" and "init" in c["argv"])
+        self.assertIn("-backend-config=bucket=state-bucket", init)
+        self.assertTrue(self.find(calls, "plan"))
+        for call in calls:
+            if call["argv"][0] == "sops":
+                self.assertEqual(call["argv"][1:3], ["exec-env", call["argv"][2]])
+                self.assertTrue(call["argv"][2].endswith("secrets/infra.enc.env"))
 
     def test_unknown_command_shows_usage(self):
         result, _ = self.run_server("launch")
