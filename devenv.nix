@@ -53,19 +53,6 @@
       tofu -chdir=infra fmt -check
       tofu -chdir=infra init -backend=false -lockfile=readonly >/dev/null
       tofu -chdir=infra validate
-
-      # Monitoring configs are checked with the same images Compose runs.
-      if docker info >/dev/null 2>&1; then
-        docker run --rm -v "$PWD/alloy/config.alloy:/etc/alloy/config.alloy:ro" \
-          grafana/alloy:latest validate /etc/alloy/config.alloy
-        docker run --rm -v "$PWD/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro" \
-          grafana/loki:latest -config.file=/etc/loki/local-config.yaml -verify-config=true
-      elif [ -n "''${CI:-}" ]; then
-        echo "validate: CI needs a Docker daemon for the Alloy/Loki checks" >&2
-        exit 1
-      else
-        echo "validate: Docker isn't running; skipped the Alloy/Loki checks (start OrbStack)"
-      fi
     '';
   };
 

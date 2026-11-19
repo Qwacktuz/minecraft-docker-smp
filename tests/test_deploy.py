@@ -25,8 +25,6 @@ if name == "sops":
         print("R2_ENDPOINT=https://r2.invalid\nR2_BUCKET_NAME=b\nRESTIC_PASSWORD=p")
         print("R2_ACCESS_KEY_ID=k\nR2_SECRET_ACCESS_KEY=s")
     sys.exit(1 if stage == "decrypt" else 0)
-if name == "tailscale":
-    print(os.environ.get("MOCK_TS_IP", "100.100.1.2"))
 if name == "docker":
     if "--env-file" in args:
         path = Path(args[args.index("--env-file") + 1])
@@ -36,33 +34,28 @@ if name == "docker":
         sys.exit(1)
     if "snapshots" in args:
         print("[]" if stage == "no-snapshots" else '[{"id": "abc"}]')
-    if "inspect" in args:
-        print("" if stage == "legacy-loki" else "bind")
-    if "ps" in args and "--quiet" in args:
-        if stage in ("legacy-loki", "configured-loki"):
-            print("loki-container-id")
-    elif "ps" in args:
+    if "ps" in args:
         print("minecraft-service")
 '''
 
 
 class DeployTests(unittest.TestCase):
-    def run_deploy(self, stage="", ip="100.100.1.2", **extra):
+    def run_deploy(self, stage="", **extra):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
         binary = root / "bin"
         binary.mkdir()
-        for name in ("sops", "tailscale", "docker", "sleep"):
+        for name in ("sops", "docker", "sleep"):
             path = binary / name
             path.write_text(f"#!{sys.executable}\n" + MOCK)
             path.chmod(0o755)
         (root / ".env").write_text("OLD=preserved\n")
         log = root / "commands.jsonl"
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
-                   MOCK_LOG=str(log), MOCK_TS_IP=ip,
+                   MOCK_LOG=str(log),
                    PATH=f"{binary}:{os.environ['PATH']}", **extra)
-        for key in ("TS_IP", "RESTORE", "NEW_WORLD"):
+        for key in ("RESTORE", "NEW_WORLD"):
             if key not in extra:
                 env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
@@ -80,37 +73,16 @@ class DeployTests(unittest.TestCase):
                 self.assertEqual((root / ".env").read_text(), "OLD=preserved\n")
                 self.assertFalse(any("up" in call or "exec" in call for call in calls))
 
-    def test_invalid_tailnet_addresses_stop_before_compose(self):
-        for ip in ("", "127.0.0.1", "100.63.1.2", "100.128.1.2",
-                   "100.100.256.2", "100.100.1.2\n100.100.1.3"):
-            with self.subTest(ip=ip):
-                root, result, calls = self.run_deploy(ip=ip)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertEqual((root / ".env").read_text(), "OLD=preserved\n")
-                self.assertFalse(any(call[0] == "docker" for call in calls))
-
     def test_success_uses_service_name_and_waits_for_health(self):
         root, result, calls = self.run_deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((root / ".env").stat().st_mode & 0o777, 0o600)
-        self.assertIn("TS_IP=100.100.1.2", (root / ".env").read_text())
         self.assertTrue(any("save-all flush" in call for call in calls))
         self.assertTrue(any("up" in call and "--wait" in call for call in calls))
         for call in calls:
             if "exec" in call:
                 self.assertIn("minecraft-service", call)
             self.assertNotIn("prune", call)
-
-    def test_local_loopback_skips_tailscale(self):
-        root, result, calls = self.run_deploy(TS_IP="127.0.0.1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("TS_IP=127.0.0.1", (root / ".env").read_text())
-        self.assertFalse(any(call[0] == "tailscale" for call in calls))
-
-    def test_preset_non_loopback_ip_is_still_checked(self):
-        _, result, calls = self.run_deploy(TS_IP="8.8.8.8", ip="8.8.8.8")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertTrue(any(call[0] == "tailscale" for call in calls))
 
     def test_restore_latest_happens_before_up(self):
         _, result, calls = self.run_deploy(RESTORE="latest")
@@ -140,16 +112,6 @@ class DeployTests(unittest.TestCase):
         self.assertNotIn("Deployment completed", result.stdout)
         self.assertFalse(any("say Deployment complete." in call for call in calls))
 
-    def test_legacy_loki_blocks_recreation(self):
-        root, result, calls = self.run_deploy("legacy-loki")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("loki-migration.md", result.stderr)
-        self.assertEqual((root / ".env").read_text(), "OLD=preserved\n")
-        self.assertFalse(any("up" in call or "pull" in call for call in calls))
-
-    def test_configured_loki_allows_deployment(self):
-        _, result, _ = self.run_deploy("configured-loki")
-        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

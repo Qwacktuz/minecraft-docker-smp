@@ -81,8 +81,8 @@ class ServerTests(unittest.TestCase):
         shutil.copy(SERVER, root / "bin/server")
         # Stand-in deploy script: records the settings bin/server hands it.
         (root / "scripts/deploy.sh").write_text(
-            'echo "{\\"argv\\": [\\"deploy.sh\\", \\"RESTORE=$RESTORE\\", '
-            '\\"TS_IP=$TS_IP\\"], \\"stdin\\": \\"\\"}" >> "$MOCK_LOG"\n')
+            'echo "{\\"argv\\": [\\"deploy.sh\\", \\"RESTORE=$RESTORE\\"], '
+            '\\"stdin\\": \\"\\"}" >> "$MOCK_LOG"\n')
         mocks = root / "mocks"
         mocks.mkdir()
         for name in ("tofu", "docker", "ssh", "git", "tailscale", "sops", "sleep"):
@@ -95,7 +95,7 @@ class ServerTests(unittest.TestCase):
         log.touch()
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
-        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "TS_IP"):
+        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE"):
             env.pop(variable, None)
         env.update({key: value for key, value in flags.items()})
         result = subprocess.run(["bash", str(root / "bin/server"), *argv], env=env,
@@ -171,11 +171,11 @@ class ServerTests(unittest.TestCase):
         for call in calls:
             self.assertNotIn(AGE_KEY, " ".join(call["argv"]))
 
-    def test_start_local_restores_on_loopback(self):
+    def test_start_local_restores_latest(self):
         result, calls = self.run_server("start", "local")
         self.assertEqual(result.returncode, 0, result.stderr)
         deploy = calls[self.find(calls, "deploy.sh")[0]]["argv"]
-        self.assertEqual(deploy, ["deploy.sh", "RESTORE=latest", "TS_IP=127.0.0.1"])
+        self.assertEqual(deploy, ["deploy.sh", "RESTORE=latest"])
 
     def test_restart_in_same_place_does_not_restore(self):
         result, calls = self.run_server("start", "local", LOCAL="1")

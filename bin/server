@@ -112,9 +112,9 @@ start_local() {
   elif vps_exists; then
     die "the world is running on the VPS; run 'bin/server stop' first"
   fi
-  SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" APP_DIR="$ROOT" TS_IP=127.0.0.1 RESTORE="$restore" \
+  SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" APP_DIR="$ROOT" RESTORE="$restore" \
     bash scripts/deploy.sh
-  say "Running locally: connect to localhost:25565 (Grafana: http://127.0.0.1:3000)"
+  say "Running locally: connect to localhost:25565"
 }
 
 start_vps() {
@@ -161,7 +161,6 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" bash scripts/deploy.sh'
     < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
 
   say "Running on the VPS: mc.cactuz.dev ($(tf output -raw ipv4_address))"
-  say "Management over Tailscale: http://$HOST:3000 (Grafana), http://$HOST:3552 (Arcane)"
 }
 
 stop() {

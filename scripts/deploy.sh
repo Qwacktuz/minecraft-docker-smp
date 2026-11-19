@@ -15,31 +15,8 @@ if [[ ! -s "$ENV_FILE" ]]; then
   exit 1
 fi
 
-# Local runs pass TS_IP=127.0.0.1 so management ports stay on the laptop.
-if [[ "${TS_IP:-}" != 127.0.0.1 ]]; then
-  TS_IP=$(tailscale ip -4)
-  if [[ ! "$TS_IP" =~ ^100\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] ||
-    (( 10#${BASH_REMATCH[1]} < 64 || 10#${BASH_REMATCH[1]} > 127 ||
-       10#${BASH_REMATCH[2]} > 255 || 10#${BASH_REMATCH[3]} > 255 )); then
-    echo "ERROR: Tailscale did not return one valid tailnet IPv4 address." >&2
-    exit 1
-  fi
-fi
-export TS_IP
-printf '\nTS_IP=%s\n' "$TS_IP" >> "$ENV_FILE"
-
 compose=(docker compose --env-file "$ENV_FILE")
 "${compose[@]}" config --quiet
-
-# Older releases stored Loki data in the container's /tmp/loki directory.
-loki_id=$("${compose[@]}" ps --all --quiet loki)
-if [[ -n "$loki_id" && ! -f .loki-storage-migrated ]]; then
-  loki_config_mount=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/loki/local-config.yaml"}}{{.Type}}{{end}}{{end}}' "$loki_id")
-  if [[ "$loki_config_mount" != bind ]]; then
-    echo "ERROR: Preserve existing Loki data before deployment; see docs/loki-migration.md." >&2
-    exit 1
-  fi
-fi
 
 echo "Pulling images before interrupting the server..."
 "${compose[@]}" pull
