@@ -1,0 +1,80 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Opens PRs against dev when a pinned version has an update. CI tests each PR; nothing goes live until the next `server start vps` after a merge.",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "baseBranchPatterns": [
+    "dev"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "dependencyDashboard": true,
+  "customManagers": [
+    {
+      "description": "Images pinned in scripts/lib.sh (NAME_IMAGE=image:tag@sha256:digest)",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^scripts/lib\\.sh$/"
+      ],
+      "matchStrings": [
+        "_IMAGE=(?<depName>[a-z0-9./_-]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "devenv version installed in CI",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/validate\\.yml$/"
+      ],
+      "matchStrings": [
+        "github:cachix/devenv/v(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "cachix/devenv",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "OpenTofu providers: update infra/.terraform.lock.hcl within the version ranges in providers.tf; CI checks the lock with tofu init -lockfile=readonly",
+      "matchManagers": [
+        "terraform"
+      ],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "description": "Keep the backup image the same in compose.yml and scripts/lib.sh",
+      "matchPackageNames": [
+        "itzg/mc-backup"
+      ],
+      "groupName": "itzg/mc-backup"
+    },
+    {
+      "description": "Temurin tags look like 25.0.5_8-jre; stay on the 25 JRE line",
+      "matchPackageNames": [
+        "eclipse-temurin"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)_(?<build>\\d+)-(?<compatibility>jre)$",
+      "allowedVersions": "<26"
+    },
+    {
+      "description": "Game server: calendar releases on the java25 line only",
+      "matchPackageNames": [
+        "itzg/minecraft-server"
+      ],
+      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<compatibility>java25)$"
+    }
+  ],
+  "ignoreDeps": [
+    "ubuntu"
+  ]
+}
