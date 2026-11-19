@@ -48,7 +48,7 @@
       set -euo pipefail
       cd "$DEVENV_ROOT"
       for script in scripts/*.sh bin/server; do bash -n "$script"; done
-      shellcheck scripts/deploy.sh bin/server
+      shellcheck scripts/deploy.sh scripts/prune.sh scripts/restore-regions.sh bin/server
       actionlint
       python3 -m unittest discover -s tests
       tofu -chdir=infra fmt -check
@@ -61,7 +61,7 @@
     shellcheck = {
       enable = true;
       # The older backup scripts in scripts/ aren't lint-clean yet.
-      files = "^(scripts/deploy\\.sh|bin/server)$";
+      files = "^(scripts/(deploy|prune|restore-regions)\\.sh|bin/server)$";
     };
     actionlint.enable = true;
     nixfmt.enable = true;

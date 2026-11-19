@@ -124,10 +124,12 @@ services:
         limits:
           memory: 6656M
 
+  # Only the VPS runs backups: deploy.sh enables this profile with BACKUPS=1.
+  # A local copy of the world is read-only and never writes to R2.
   backup:
     image: itzg/mc-backup
     container_name: mc-backup
-    hostname: mc-backup-worker
+    profiles: [backup]
     restart: unless-stopped
     logging: *bounded-logging
     security_opt:
@@ -142,8 +144,13 @@ services:
       # Compression & Size Savings (exclude bluemap)
       EXCLUDES: "bluemap,logs,cache,emotes,*.tmp,web,*.map"
 
-      PRUNE_RESTIC_RETENTION: "--keep-within 24h --keep-daily 7 --keep-weekly 4 --keep-monthly 6"
+      # Snapshots tagged pre-prune (taken before a chunk prune) are kept too;
+      # bin/server keeps that tag on the newest few only.
+      PRUNE_RESTIC_RETENTION: "--keep-within 24h --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --keep-tag pre-prune"
       BACKUP_METHOD: "restic"
+      # The identity restores filter on (deploy.sh, bin/server). Older snapshots
+      # carry this name too, from when it was the container hostname.
+      RESTIC_HOST: mc-backup-worker
       RESTIC_REPOSITORY: "s3:${R2_ENDPOINT:?Set R2_ENDPOINT in .env}/${R2_BUCKET_NAME:?Set R2_BUCKET_NAME in .env}"
       RESTIC_PASSWORD: "${RESTIC_PASSWORD:?Set RESTIC_PASSWORD in .env}"
       AWS_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in .env}"

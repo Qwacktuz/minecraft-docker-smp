@@ -63,7 +63,7 @@ class DeployTests(unittest.TestCase):
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log),
                    PATH=f"{binary}:{os.environ['PATH']}", **extra)
-        for key in ("RESTORE", "NEW_WORLD"):
+        for key in ("RESTORE", "NEW_WORLD", "BACKUPS"):
             if key not in extra:
                 env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
@@ -104,6 +104,25 @@ class DeployTests(unittest.TestCase):
         for call in calls:  # secrets are passed by name, never as values
             self.assertNotIn("RESTIC_PASSWORD=p", call)
             self.assertFalse(any(arg.endswith("=s") for arg in call))
+
+    def test_restore_is_read_only_and_limited_to_vps_snapshots(self):
+        _, result, calls = self.run_deploy(RESTORE="latest")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for call in calls:
+            if "restore" in call or "snapshots" in call:
+                self.assertIn("--no-lock", call)
+                self.assertEqual(call[call.index("--host") + 1], "mc-backup-worker")
+
+    def test_only_backups_1_enables_the_backup_service(self):
+        root, result, calls = self.run_deploy(BACKUPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("COMPOSE_PROFILES=backup", (root / ".env").read_text())
+        self.assertFalse(any("rm" in call for call in calls))
+        root, result, calls = self.run_deploy()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("COMPOSE_PROFILES", (root / ".env").read_text())
+        # A leftover backup container is removed, so a local copy never uploads.
+        self.assertTrue(any("rm" in call and "backup" in call for call in calls))
 
     def test_restore_without_snapshots_needs_new_world(self):
         _, result, calls = self.run_deploy("no-snapshots", RESTORE="latest")

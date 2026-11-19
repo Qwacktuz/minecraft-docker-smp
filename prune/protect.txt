@@ -1,0 +1,12 @@
+# Areas pruning never touches, on top of the automatic rules in settings.env.
+# One area per line: <dimension> <x> <z> <radius>, in blocks (the F3 coordinates).
+# Dimensions: overworld, the_nether, the_end.
+#
+# overworld 0 0 256        # spawn
+# the_nether 120 -40 64    # nether hub
+
+# The main End island comes from the world's original seed, kept for continuity
+# when the rest was regenerated with a new one. Pruned chunks regenerate from the
+# current seed, so keep the island and the empty void around it (to 1024 blocks,
+# where the outer islands start) intact.
+the_end 0 0 1024

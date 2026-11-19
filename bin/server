@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # One entry point for the Minecraft world, run from the laptop.
 #
-#   bin/server start local   run the world in Docker on this machine
 #   bin/server start vps     create the Hetzner VPS and run the world there
-#   bin/server stop          final backup to R2, shut down, delete the VPS
+#   bin/server start local   run a read-only copy of the world on this machine
+#   bin/server stop          shut down; on the VPS: final backup, delete the VPS
 #   bin/server status        where is the world running?
+#   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
 #
-# There is one world. It lives in R2 (Restic) between runs: `stop` only shuts
-# down after a fresh backup is verified, and `start` restores the newest one.
+# There is one world. It lives in R2 (Restic) between runs. Only the VPS writes
+# to R2: `stop` there shuts down after a fresh backup is verified. `start`
+# restores the newest VPS snapshot; a local copy is never backed up.
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -19,6 +21,7 @@ SSH_USER=${SSH_USER:-deployer}           # infra var.username
 REPO=${REPO:-https://github.com/Qwacktuz/minecraft-docker-smp.git}
 AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
 WORLD=data/minecraft/world/level.dat     # present once a world has been restored
+WORLD_HOST=mc-backup-worker              # restic host of the VPS backups (compose.yml)
 
 die() { echo "server: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
@@ -76,29 +79,78 @@ where_running() {
 
 # --- Backups -------------------------------------------------------------------
 
-# Prints the epoch time of the newest snapshot (reads restic JSON on stdin).
-snapshot_epoch() {
+# Reads restic snapshot JSON on stdin and prints "<epoch> <id>" per snapshot,
+# newest first. Fails when there are none.
+snapshot_list() {
   python3 -c '
 import json, re, sys
 from datetime import datetime
-times = [s["time"] for s in json.load(sys.stdin)]
-if not times: sys.exit(1)
 def epoch(t):
     t = re.sub(r"\.\d+", "", t).replace("Z", "+00:00")  # drop nanoseconds
     return int(datetime.fromisoformat(t).timestamp())
-print(max(epoch(t) for t in times))'
+snaps = sorted(((epoch(s["time"]), s["id"]) for s in json.load(sys.stdin)), reverse=True)
+if not snaps: sys.exit(1)
+for time, id in snaps: print(time, id)'
+}
+# `restic` runs inside the VPS backup container, limited to the VPS snapshots.
+vps_restic() { on vps "docker compose exec -T backup restic $* --host $WORLD_HOST"; }
+
+# Backs up the VPS world now and checks that the snapshot reached R2. Sets
+# SNAPSHOT_ID. The game keeps running if anything fails.
+verified_backup() {
+  local message=$1 started latest
+  say "Taking a backup on the VPS..."
+  started=$(on vps date -u +%s)
+  on vps "docker compose exec -T minecraft-service rcon-cli $(printf %q "say $message")" || true
+  on vps "docker compose exec -T backup backup now" || die "backup failed; the server is still running"
+  latest=$(vps_restic snapshots --latest 1 --json | snapshot_list | head -n1) ||
+    die "could not read the latest snapshot; the server is still running"
+  (( ${latest% *} >= started )) || die "no new snapshot appeared in R2; the server is still running"
+  SNAPSHOT_ID=${latest#* }
+  say "Backup ${SNAPSHOT_ID:0:8} verified in R2."
 }
 
-final_backup() {
-  local where=$1 started latest
-  say "Taking a final backup on $where..."
-  started=$(on "$where" date -u +%s)
-  on "$where" "docker compose exec -T minecraft-service rcon-cli 'say Server shutting down for a final backup...'" || true
-  on "$where" "docker compose exec -T backup backup now" || die "backup failed; the server is still running"
-  latest=$(on "$where" "docker compose exec -T backup restic snapshots --latest 1 --json" | snapshot_epoch) ||
-    die "could not read the latest snapshot; the server is still running"
-  (( latest >= started )) || die "no new snapshot appeared in R2; the server is still running"
-  say "Backup verified in R2."
+# --- Pruning -------------------------------------------------------------------
+
+prune_settings() {
+  # shellcheck disable=SC1091 # prune/settings.env
+  . "$ROOT/prune/settings.env"
+}
+
+# Backs up, tags the snapshot pre-prune (for rollbacks), prunes, restarts.
+prune_vps() {
+  prune_settings
+  verified_backup "Restarting in a moment for world maintenance (pruning unused chunks)..."
+  vps_restic tag --add pre-prune "$SNAPSHOT_ID" >/dev/null || die "could not tag the pre-prune snapshot"
+  # Keep only the newest pre-prune tags; older snapshots fall back to normal retention.
+  local snaps old
+  snaps=$(vps_restic snapshots --tag pre-prune --json | snapshot_list) || die "could not list pre-prune snapshots"
+  old=$(tail -n +"$((PRUNE_KEEP_SNAPSHOTS + 1))" <<< "$snaps" | cut -d' ' -f2 | tr '\n' ' ')
+  if [[ -n "$old" ]]; then vps_restic tag --remove pre-prune "$old" >/dev/null || true; fi
+  local rollback
+  rollback=$(head -n1 <<< "$snaps" | cut -d' ' -f2)
+
+  say "Stopping the game to prune..."
+  on vps "docker compose stop minecraft-service backup"
+  if ! on vps "bash scripts/prune.sh"; then
+    on vps "docker compose up -d --wait --wait-timeout 600" || true
+    die "pruning failed; the game was restarted. Pre-prune snapshot: ${rollback:0:8}"
+  fi
+  say "Starting the game again..."
+  on vps "docker compose up -d --wait --wait-timeout 600" ||
+    die "the game did not become healthy after pruning. Pre-prune snapshot: ${rollback:0:8}"
+  say "Pruned. Pre-prune snapshot for rollbacks: ${rollback:0:8}"
+}
+
+# True when automatic pruning is on and the last prune is older than AUTO_PRUNE_DAYS.
+prune_due() {
+  prune_settings
+  (( AUTO_PRUNE_DAYS > 0 )) || return 1
+  local json last=0
+  json=$(vps_restic snapshots --tag pre-prune --json) ||
+    { echo "warning: could not check when the world was last pruned; skipping" >&2; return 1; }
+  if last=$(snapshot_list <<< "$json" | head -n1); then last=${last% *}; else last=0; fi
+  (( $(date +%s) - last >= AUTO_PRUNE_DAYS * 86400 ))
 }
 
 # --- Commands ------------------------------------------------------------------
@@ -113,9 +165,10 @@ start_local() {
   elif vps_exists; then
     die "the world is running on the VPS; run 'bin/server stop' first"
   fi
-  SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" APP_DIR="$ROOT" RESTORE="$restore" \
+  SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" APP_DIR="$ROOT" RESTORE="$restore" BACKUPS='' \
     bash scripts/deploy.sh
   say "Running locally: connect to localhost:25565"
+  say "This is a read-only copy: nothing done here is saved to R2."
 }
 
 start_vps() {
@@ -166,7 +219,7 @@ mkdir -p ~/app && cd ~/app
 exec 9>~/.minecraft-deploy.lock; flock -w 1800 9
 [ -d .git ] || git clone -q "$REPO" .
 git fetch -q origin "$SHA" && git reset -q --hard "$SHA"
-APP_DIR="$HOME/app" RESTORE="$RESTORE" bash scripts/deploy.sh'
+APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
   remote "$(printf 'REPO=%q SHA=%q RESTORE=%q bash -c %q' "$REPO" "$sha" "$restore" "$script")" \
     < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
 
@@ -179,21 +232,29 @@ stop() {
   where=$(where_running)
   if [[ "$where" == none ]]; then say "Nothing is running."; return; fi
 
-  if [[ "$where" == vps ]] && ! remote true 2>/dev/null; then
-    die "a VPS exists but is unreachable; check it before destroying (tofu -chdir=infra destroy)"
+  if [[ "$where" == local ]]; then
+    say "Stopping the local copy (nothing is saved to R2)..."
+    on local "docker compose down"
+    say "Stopped."
+    return
   fi
-  final_backup "$where"
-  say "Stopping containers..."
-  on "$where" "docker compose down"
 
-  if [[ "$where" == vps ]]; then
-    say "Deleting the VPS..."
-    remote "sudo tailscale logout" 2>/dev/null || true
-    tf destroy -input=false -auto-approve
-    # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
-    sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _forget-device "$HOST")" ||
-      echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
+  remote true 2>/dev/null ||
+    die "a VPS exists but is unreachable; check it before destroying (tofu -chdir=infra destroy)"
+  if prune_due; then
+    say "The last prune is more than $AUTO_PRUNE_DAYS days old; pruning first."
+    prune_vps
   fi
+  verified_backup "Server shutting down for a final backup..."
+  say "Stopping containers..."
+  on vps "docker compose down"
+
+  say "Deleting the VPS..."
+  remote "sudo tailscale logout" 2>/dev/null || true
+  tf destroy -input=false -auto-approve
+  # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
+  sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _forget-device "$HOST")" ||
+    echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
   say "Stopped. The world is safe in R2."
 }
 
@@ -217,24 +278,42 @@ status() {
   where=$(where_running)
   case "$where" in
     none) say "Stopped (the world is in R2)."; return ;;
-    local) say "Running locally." ;;
+    local) say "Running locally (a read-only copy; nothing is saved to R2)."; return ;;
     vps) say "Running on the VPS ($HOST)." ;;
   esac
   local latest
-  if latest=$(on "$where" "docker compose exec -T backup restic snapshots --latest 1 --json" | snapshot_epoch); then
+  if latest=$(vps_restic snapshots --latest 1 --json | snapshot_list | head -n1); then
+    latest=${latest% *}
     say "Latest backup: $(date -r "$latest" 2>/dev/null || date -d "@$latest")"
   else
     say "Latest backup: unknown"
   fi
 }
 
-usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+prune() {
+  local where
+  where=$(where_running)
+  case "${1:-}" in
+    --dry-run)
+      [[ "$where" != none ]] ||
+        die "nothing is running; start the world first ('start local' is fine for a dry run)"
+      on "$where" "bash scripts/prune.sh --dry-run" ;;
+    "")
+      [[ "$where" == vps ]] ||
+        die "pruning changes the real world, which runs on the VPS; the local copy is read-only (use --dry-run)"
+      prune_vps ;;
+    *) usage 1 >&2 ;;
+  esac
+}
+
+usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
   "stop "*) stop ;;
   "status "*) status ;;
+  "prune "*) prune "${2:-}" ;;
   "tofu "*) shift; tf_init; tf "$@" ;;
   "_forget-device "*) forget_device "$2" ;;
   "-h "* | "--help "* | "help "*) usage ;;
