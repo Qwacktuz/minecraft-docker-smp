@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased: start from GitHub, idle auto-stop (2026-11-19)
+
+- **Start and stop from GitHub.** `.github/workflows/server.yml` runs
+  `bin/server start vps` or `stop` on a runner ("Run workflow"), for anyone
+  with write access. One run at a time. Details: docs/auto-stop.md.
+- **Idle auto-stop.** Every 15 minutes `scripts/idle_check.py` reads the
+  player count with a server list ping (no secrets). After 2 hours with nobody
+  online (Carpet bots count), or 7 days of uptime, the workflow runs
+  `bin/server stop`. Tests: `tests/test_idle.py`.
+- **A CI-only Age key** is the second recipient in `.sops.yaml`. It lives only
+  in the `prod` environment, which only `main` may use, and `main` accepts
+  updates from admins only. Tailscale access uses GitHub OIDC, so no Tailscale
+  secret is stored.
+
 ## Unreleased: script cleanups (2026-11-19)
 
 No behaviour changes.

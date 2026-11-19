@@ -1,0 +1,134 @@
+name: Server
+
+# Start or stop the VPS from GitHub, and stop it when nobody plays.
+# It runs bin/server, exactly like the laptop, so the two never drift apart.
+#
+# - "Run workflow" (anyone with write access): start or stop the VPS.
+# - Every 15 minutes: if nobody (Carpet bots count) has been online for
+#   IDLE_MINUTES, or the VPS has been up for MAX_DAYS, run `bin/server stop`.
+#
+# Secrets: only the "prod" environment has them, and only main may use it
+# (repository settings). Its one secret is SOPS_AGE_KEY, a CI-only Age key
+# (a recipient in .sops.yaml) that decrypts secrets/*.enc.env. Tailscale needs
+# no secret: the runner logs in with GitHub's OIDC token (variables
+# TS_CLIENT_ID and TS_AUDIENCE). See docs/auto-stop.md.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Start or stop the VPS
+        type: choice
+        options: [start, stop]
+        default: start
+  schedule:
+    # Off the full hour, when GitHub's scheduler is least busy.
+    - cron: "7,22,37,52 * * * *"
+
+permissions:
+  contents: read
+
+env:
+  IDLE_MINUTES: 120
+  MAX_DAYS: 7
+
+jobs:
+  watch:
+    name: Anyone online?
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write # keeps the idle state in the Actions cache
+    outputs:
+      stop: ${{ steps.check.outputs.stop }}
+    steps:
+      # Actions are pinned to commits (tag in the comment); Renovate bumps them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The newest saved state: when the VPS was first seen, when someone was last online.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .idle
+          key: idle-${{ github.run_id }}
+          restore-keys: idle-
+
+      - name: Check the player count (no secrets needed)
+        id: check
+        run: python3 scripts/idle_check.py --state .idle/state.json --idle-minutes "$IDLE_MINUTES" --max-days "$MAX_DAYS"
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .idle
+          key: idle-${{ github.run_id }}
+
+      - name: Delete older idle states
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT: idle-${{ github.run_id }}
+        run: |
+          gh cache list --key idle- --limit 100 --json id,key |
+            jq -r --arg current "$CURRENT" '.[] | select(.key != $current) | .id' |
+            xargs -r -n1 gh cache delete
+
+  server:
+    name: bin/server ${{ inputs.action || 'stop' }}
+    needs: watch
+    # Runs on "Run workflow", or when the watch job says stop.
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.watch.outputs.stop == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: prod
+    # One start or stop at a time; a queued one waits, never cancels a running one.
+    concurrency:
+      group: server
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # Tailscale login with GitHub's OIDC token
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # bin/server checks that the commit is on GitHub
+
+      # Joins the tailnet as an ephemeral tag:ci device; logs out at the end.
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ vars.TS_CLIENT_ID }}
+          audience: ${{ vars.TS_AUDIENCE }}
+          tags: tag:ci
+
+      - name: Reach the VPS by its Tailscale name
+        run: |
+          mkdir -p ~/.ssh
+          printf 'Host mc-prod\n  ProxyCommand tailscale nc %%h %%p\n' >> ~/.ssh/config
+
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (the version used locally)
+        run: nix profile add github:cachix/devenv/v2.4.0
+
+      - name: Write the CI Age key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          : "${SOPS_AGE_KEY:?the prod environment has no SOPS_AGE_KEY secret}"
+          umask 077
+          printf '%s\n' "$SOPS_AGE_KEY" > "$RUNNER_TEMP/age.txt"
+          echo "SOPS_AGE_KEY_FILE=$RUNNER_TEMP/age.txt" >> "$GITHUB_ENV"
+
+      - name: Run bin/server
+        env:
+          ACTION: ${{ inputs.action || 'stop' }}
+        run: |
+          if [[ "$ACTION" == start ]]; then set -- start vps; else set -- stop; fi
+          devenv shell bin/server "$@"
+
+      - name: Remove the Age key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/age.txt"

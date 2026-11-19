@@ -2,4 +2,7 @@ creation_rules:
   - path_regex: .*\.enc\.env$
     key_groups:
       - age:
+          # Admin laptop
           - age1rqzjng53hyak0lzaj5730zdez72eakj28zgtqqp68jkd9xuq0gask43smw
+          # GitHub Actions (secret SOPS_AGE_KEY in the prod environment); remove to revoke CI
+          - age1dmlhmr7t5kgtz7njr37p3gkhgzljya2cauplnd0q3thtcrfuj9hs8lr87k

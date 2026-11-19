@@ -20,6 +20,12 @@ server tofu plan         # run OpenTofu by hand with the encrypted credentials
 
 (`server` is `bin/server`, on PATH inside the devenv shell.)
 
+**From GitHub, without the laptop:** anyone with write access can start or stop
+the VPS under **Actions** → **Server** → **Run workflow**. It runs the same
+`bin/server` on a GitHub runner. The VPS also **stops itself when idle**: after
+2 hours with nobody online (Carpet bots count as players), or after 7 days at
+most. Setup and how the runner gets its access: [docs/auto-stop.md](docs/auto-stop.md).
+
 **There is one world, it lives in R2, and only the VPS writes to it.** On the VPS,
 `stop` takes a backup and only shuts down once a snapshot newer than the stop
 request appears in R2. Otherwise it aborts and leaves the server running. `start`
@@ -99,10 +105,12 @@ again any time with `server vault`. Restoring from the vault:
 
 ## Secrets
 
-Everything is SOPS/Age-encrypted in `secrets/`: `infra.enc.env` (laptop only:
-OpenTofu, the state bucket, the vault) and `app.enc.env` (Compose, the VPS
-backups). Edit them with `sops secrets/<file>`. Nothing secret is stored anywhere
-else, and CI needs none. Each Cloudflare token reaches only its own buckets:
+Everything is SOPS/Age-encrypted in `secrets/`: `infra.enc.env` (laptop and the
+GitHub `Server` workflow: OpenTofu, the state bucket, the vault) and
+`app.enc.env` (Compose, the VPS backups). Edit them with `sops secrets/<file>`.
+Two Age keys can decrypt them (`.sops.yaml`): yours, and a CI-only key whose one
+copy is the `SOPS_AGE_KEY` secret of the `prod` environment, which only `main`
+can use. The validate workflow needs no secrets. Each Cloudflare token reaches only its own buckets:
 [infra/README.md](infra/README.md#cloudflare-tokens-and-buckets).
 
 ## Alerts and updates
