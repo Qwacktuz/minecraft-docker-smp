@@ -35,6 +35,8 @@ if name == "docker":
     if "restore" in args:  # restic restore writes the world into data/minecraft
         Path("data/minecraft/world").mkdir(parents=True, exist_ok=True)
         Path("data/minecraft/world/level.dat").touch()
+    if args[:1] == ["info"]:
+        print("aarch64" if stage == "arm64" else "x86_64")
     if "snapshots" in args:
         print("[]" if stage == "no-snapshots" else '[{"id": "abc"}]')
     if "ps" in args:
@@ -111,6 +113,13 @@ class DeployTests(unittest.TestCase):
         _, result, calls = self.run_deploy("no-snapshots", RESTORE="latest", NEW_WORLD="1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any("restore" in call for call in calls))
+
+    def test_arm64_hosts_use_aikar_flags(self):
+        root, result, _ = self.run_deploy("arm64")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("USE_MEOWICE_FLAGS=false\nUSE_AIKAR_FLAGS=true", (root / ".env").read_text())
+        root, result, _ = self.run_deploy()
+        self.assertNotIn("USE_MEOWICE_FLAGS", (root / ".env").read_text())
 
     def test_missing_world_is_never_started(self):
         _, result, calls = self.run_deploy(world=False)

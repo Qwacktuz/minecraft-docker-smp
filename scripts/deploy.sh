@@ -15,6 +15,12 @@ if [[ ! -s "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# MeowIce's JIT flags crash the JVM's C2 compiler on ARM64 (e.g. Apple Silicon
+# under OrbStack); use Aikar's conservative G1 flags there.
+case "$(docker info --format '{{.Architecture}}')" in
+  aarch64 | arm64) printf 'USE_MEOWICE_FLAGS=false\nUSE_AIKAR_FLAGS=true\n' >> "$ENV_FILE" ;;
+esac
+
 compose=(docker compose --env-file "$ENV_FILE")
 "${compose[@]}" config --quiet
 

@@ -47,7 +47,10 @@ services:
 
       RCON_PASSWORD: ${RCON_PASSWORD:?Set RCON_PASSWORD in .env}
 
-      USE_MEOWICE_FLAGS: true
+      # MeowIce's aggressive JIT flags crash the JVM's C2 compiler on ARM64;
+      # deploy.sh switches ARM hosts to Aikar's G1 flags instead.
+      USE_MEOWICE_FLAGS: "${USE_MEOWICE_FLAGS:-true}"
+      USE_AIKAR_FLAGS: "${USE_AIKAR_FLAGS:-false}"
       MEMORY: 5G
 
       REMOVE_OLD_MODS: true
