@@ -178,10 +178,27 @@ stop() {
 
   if [[ "$where" == vps ]]; then
     say "Deleting the VPS..."
-    remote "sudo tailscale logout" 2>/dev/null || true   # frees the 'mc-prod' name
+    remote "sudo tailscale logout" 2>/dev/null || true
     tf destroy -input=false -auto-approve
+    # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
+    sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _forget-device "$HOST")" ||
+      echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
   fi
   say "Stopped. The world is safe in R2."
+}
+
+# Deletes tailnet devices named $1 via the Tailscale API. Runs under sops
+# exec-env, which provides the OAuth client credentials.
+# shellcheck disable=SC2154 # TF_VAR_* come from sops exec-env
+forget_device() {
+  local api=https://api.tailscale.com/api/v2 token id
+  token=$(printf 'client_id=%s&client_secret=%s' "$TF_VAR_ts_oauth_client_id" "$TF_VAR_ts_oauth_client_secret" |
+    curl -sf -d @- "$api/oauth/token" | jq -re .access_token) || return 1
+  auth() { printf 'header = "Authorization: Bearer %s"\n' "$token"; }
+  for id in $(auth | curl -sf -K - "$api/tailnet/-/devices" |
+              jq -r --arg host "$1" '.devices[] | select(.hostname == $host) | .id'); do
+    auth | curl -sf -K - -X DELETE "$api/device/$id" >/dev/null || return 1
+  done
 }
 
 status() {
@@ -209,6 +226,7 @@ case "${1:-} ${2:-}" in
   "stop "*) stop ;;
   "status "*) status ;;
   "tofu "*) shift; tf_init; tf "$@" ;;
+  "_forget-device "*) forget_device "$2" ;;
   "-h "* | "--help "* | "help "*) usage ;;
   *) usage 1 >&2 ;;
 esac

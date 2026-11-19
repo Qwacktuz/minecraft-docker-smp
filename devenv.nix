@@ -13,6 +13,7 @@
   packages = with pkgs; [
     # Running the server
     docker # CLI with the Compose and buildx plugins; talks to OrbStack's socket
+    curl
     git # (ssh comes from macOS; Nix's build rejects UseKeychain in ~/.ssh/config)
 
     # Secrets

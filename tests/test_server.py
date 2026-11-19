@@ -85,7 +85,7 @@ class ServerTests(unittest.TestCase):
             '\\"stdin\\": \\"\\"}" >> "$MOCK_LOG"\n')
         mocks = root / "mocks"
         mocks.mkdir()
-        for name in ("tofu", "docker", "ssh", "git", "tailscale", "sops", "sleep"):
+        for name in ("tofu", "docker", "ssh", "git", "tailscale", "sops", "sleep", "curl"):
             path = mocks / name
             path.write_text(f"#!{sys.executable}\n" + MOCK)
             path.chmod(0o755)
@@ -133,6 +133,11 @@ class ServerTests(unittest.TestCase):
         self.assertLess(backup, down)
         self.assertLess(down, logout)
         self.assertLess(logout, destroy)
+        # The tailnet device is removed after the server is gone; a failed
+        # API call (the curl mock returns nothing) only warns.
+        forget = self.find(calls, "_forget-device mc-prod")[0]
+        self.assertLess(destroy, forget)
+        self.assertIn("could not remove mc-prod", result.stderr)
 
     def test_stop_local_keeps_infrastructure(self):
         result, calls = self.run_server("stop", LOCAL="1")
