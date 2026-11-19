@@ -1,6 +1,0 @@
-name: carpet_trusted
-permissions:
-  - group.default:
-      value: true
-  - carpet.commands.player:
-      value: true
