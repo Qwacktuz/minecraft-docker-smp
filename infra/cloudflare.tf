@@ -1,10 +1,3 @@
-# data "cloudflare_zones" "domain" {
-#   account = {
-#     id = var.cloudflare_account_id
-#   }
-#   name = var.cloudflare_zone_name
-# }
-#
 resource "cloudflare_dns_record" "minecraft_v4" {
   zone_id = var.cloudflare_zone_id
   name    = var.minecraft_subdomain
@@ -22,14 +15,4 @@ resource "cloudflare_dns_record" "minecraft_v6" {
   type    = "AAAA"
   ttl     = 300
   proxied = false
-}
-
-output "proxy_ipv4" {
-  description = "Public IPv4 of the Minecraft VPS"
-  value       = hcloud_server.minecraft.ipv4_address
-}
-
-output "proxy_ipv6" {
-  description = "Public IPv6 of the Minecraft VPS"
-  value       = hcloud_server.minecraft.ipv6_address
 }

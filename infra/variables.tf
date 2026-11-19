@@ -1,5 +1,4 @@
-# Deployment secrets
-# TODO: depricate enterly from tterraform 
+# Values come from secrets/infra.enc.env as TF_VAR_* (see bin/server).
 variable "hcloud_token" {
   description = "Hetzner Cloud API Token"
   type        = string
@@ -18,19 +17,11 @@ variable "ts_oauth_client_secret" {
   sensitive   = true
 }
 
-# Server variables
 variable "ts_tailnet" {
   description = "Tailscale tailnet name (e.g. 'user.github')"
   type        = string
   default     = "qwacktuz.github"
 }
-
-# variable "cloudflare_account_id" {
-#   description = "Cloudflare account ID"
-#   type        = string
-#   default     = null
-#   sensitive   = true
-# }
 
 variable "cloudflare_zone_id" {
   description = "cloudflare zone id"

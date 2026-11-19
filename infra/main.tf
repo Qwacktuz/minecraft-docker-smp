@@ -3,24 +3,16 @@ resource "hcloud_ssh_key" "deploy_key" {
   public_key = var.ssh_public_key
 }
 
-# Fetch the current runner's IP for dynamic provisioning
-# In case I change product etc.
-# FIXME: should be changed if using CI/CD pipeline
-# But works for now since I am pushing updates from my local machine
-# data "http" "runner_ip" {
-#   url = "https://ipv4.icanhazip.com"
-# }
-
-# Generate a one-time ephemeral Tailscale Auth key using OAuth credentials
+# Single-use bootstrap key. Ephemeral: the device disappears once a deleted VPS
+# goes offline, so the next VPS gets the same Tailscale name.
 resource "tailscale_tailnet_key" "server_key" {
   reusable      = false
-  ephemeral     = true # device disappears once a deleted VPS goes offline
+  ephemeral     = true
   preauthorized = true
-  expiry        = 3600           # 1 hour for bootstrap
-  tags          = ["tag:server"] # scuffed ACL fix later
+  expiry        = 3600 # 1 hour for bootstrap
+  tags          = ["tag:server"]
 }
 
-# Prepare the cloud-init config using the cloudinit provider
 data "cloudinit_config" "minecraft_cfg" {
   gzip          = false
   base64_encode = false
@@ -36,54 +28,33 @@ data "cloudinit_config" "minecraft_cfg" {
   }
 }
 
-# First layer of defense
+# Only the game is public. SSH is reachable over Tailscale only.
 resource "hcloud_firewall" "minecraft_fw" {
   name = "minecraft-firewall"
 
-  # Minecraft TCP/UDP
   rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "24464"
-    source_ips = ["0.0.0.0/0", "::/0"]
+    description = "Minecraft"
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "25565"
+    source_ips  = ["0.0.0.0/0", "::/0"]
   }
 
   rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "25565"
-    source_ips = ["0.0.0.0/0", "::/0"]
-  }
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "25565"
-    source_ips = ["0.0.0.0/0", "::/0"]
+    description = "Simple Voice Chat mod"
+    direction   = "in"
+    protocol    = "udp"
+    port        = "24454"
+    source_ips  = ["0.0.0.0/0", "::/0"]
   }
 
-  # simplevoicechat mod udp
   rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "24454"
-    source_ips = ["0.0.0.0/0", "::/0"]
+    description = "Webcam mod"
+    direction   = "in"
+    protocol    = "udp"
+    port        = "25454"
+    source_ips  = ["0.0.0.0/0", "::/0"]
   }
-
-  # webcam mod udp
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "25454"
-    source_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # Enable SSH: Restricted to runner 
-  # rule {
-  #   direction  = "in"
-  #   protocol   = "tcp"
-  #   port       = "22"
-  #   source_ips = ["${chomp(data.http.runner_ip.response_body)}/32"]
-  # }
 }
 
 resource "hcloud_server" "minecraft" {
@@ -102,7 +73,9 @@ resource "hcloud_server" "minecraft" {
   }
 
   lifecycle {
-    prevent_destroy = false # Set to true when statble to prevent deleting state
-    ignore_changes  = [user_data]
+    # bin/server stop deletes the server on purpose, after a verified backup.
+    prevent_destroy = false
+    # Cloud-init changes apply to the next VPS, never by replacing a running one.
+    ignore_changes = [user_data]
   }
 }
