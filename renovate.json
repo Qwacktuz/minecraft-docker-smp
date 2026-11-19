@@ -16,7 +16,9 @@
   "labels": [
     "dependencies"
   ],
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "customManagers": [
     {
       "description": "Images pinned in scripts/lib.sh (NAME_IMAGE=image:tag@sha256:digest)",
