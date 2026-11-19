@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    # Will be provided at runtime via the -backend-config flag
+    # Provided by bin/server from secrets/infra.enc.env via -backend-config
     bucket   = ""
     key      = "prod/terraform.tfstate"
     region   = "auto"

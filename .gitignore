@@ -8,6 +8,10 @@ sync-secrets.sh
 .env
 .env.local
 .env.secrets
+.env.*
+age.key
+.state/
+secrets/local/
 .secrets
 .vars
 .direnv/
@@ -35,6 +39,7 @@ logs/
 
 # Cache
 .cache/
+__pycache__/
 *.tmp
 
 # IDE
@@ -47,10 +52,13 @@ logs/
 data/
 backups/
 
-# Local prometheus data
-prometheus_data/
-grafana_data/
 
 # OS specific
 .DS_Store
 Thumbs.db
+
+# devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+.pre-commit-config.yaml

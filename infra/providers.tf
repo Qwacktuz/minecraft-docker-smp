@@ -18,10 +18,6 @@ terraform {
       source  = "hashicorp/cloudinit"
       version = "~> 2.4"
     }
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.6"
-    }
   }
 }
 
