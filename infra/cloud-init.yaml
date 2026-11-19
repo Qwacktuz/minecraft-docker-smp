@@ -33,16 +33,18 @@ runcmd:
   - set -e
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
 
+  # Docker first: Tailscale SSH sessions only get groups that existed when
+  # tailscaled started, so the docker group must be set up before it.
+  # Install Docker via official script
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - usermod -aG docker ${username}
+
   # Install & initialize Tailscale
   - curl -fsSL https://tailscale.com/install.sh | sh
   - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
   - systemctl restart tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --hostname=${hostname} --reset
-
-  # Install Docker via official script
-  - curl -fsSL https://get.docker.com | sh
-  - systemctl enable --now docker
-  - usermod -aG docker ${username}
 
   # Install SOPS CLI
   - curl -LO https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
