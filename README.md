@@ -39,6 +39,14 @@ restore. Restores only consider snapshots from the VPS backup host
 homes, recent activity and a buffer around them. It can also run automatically
 every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pruning.md).
 
+**A public world download.** Every VPS `stop` also uploads the world as
+**https://world.cactuz.dev/world.zip**, after the final backup and with the game
+stopped. It has no player data (inventories, positions, stats), so anyone can take a
+copy to test redstone in singleplayer or on their own server; the zip's README.txt
+explains how. It lives in its own public bucket (`PUBLIC_WORLD_BUCKET` in
+`app.enc.env`), separate from the private backups. If the upload fails, `stop`
+only warns. It updates at each stop, not while the server runs.
+
 Deleting the VPS removes the server, firewall, DNS records and Tailscale device.
 The R2 backups and the OpenTofu state are separate and are never deleted.
 `start vps` deploys the current commit from GitHub, so push it first.
@@ -99,6 +107,7 @@ tests use mocks and dummy credentials.
 
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
+- `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
 - `scripts/restore-backup.sh`, `restore-regions.sh`, `rollback-backup.sh`,
   `test-backup.sh`: manual backup tools, run on the app host.
 - `compose.yml`, `static/icon.png`: the game and its backups.

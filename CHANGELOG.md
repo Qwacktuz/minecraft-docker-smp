@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: public world download (2026-11-19)
+
+- `bin/server stop` on the VPS publishes `world.zip`, without `players/`, to a
+  separate public R2 bucket served at `world.cactuz.dev`. It runs after the
+  verified final backup, with the game stopped. A failure only warns, and nothing
+  is published until `PUBLIC_WORLD_BUCKET` is set.
+
 ## Unreleased: read-only local copies and chunk pruning (2026-11-19)
 
 - Only the VPS writes to R2. The backup service is in the Compose profile

@@ -252,6 +252,9 @@ stop() {
   verified_backup "Server shutting down for a final backup..."
   say "Stopping containers..."
   on vps "docker compose down"
+  # A public download of the world (no player data); never blocks the stop.
+  on vps "bash scripts/publish-world.sh" ||
+    echo "warning: could not publish world.zip; the backup in R2 is safe" >&2
 
   say "Deleting the VPS..."
   remote "sudo tailscale logout" 2>/dev/null || true

@@ -64,6 +64,8 @@ elif name == "ssh":
         snapshots()
     if "tag --add pre-prune" in command:
         Path(os.environ["MOCK_LOG"] + ".tagged").touch()
+    if "publish-world.sh" in command and flag("PUBLISH_FAIL"):
+        sys.exit(1)
     if "scripts/prune.sh" in command and flag("PRUNE_FAIL"):
         sys.exit(1)
 elif name == "git":
@@ -161,6 +163,18 @@ class ServerTests(unittest.TestCase):
         self.assertLess(destroy, forget)
         self.assertIn("could not remove mc-prod", result.stderr)
 
+    def test_stop_publishes_the_world_after_down_and_before_destroy(self):
+        result, calls = self.run_server("stop", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        publish = self.find(calls, "publish-world.sh")[0]
+        self.assertLess(self.find(calls, "compose down")[0], publish)
+        self.assertLess(publish, self.find(calls, "destroy")[0])
+        # A failed publish only warns; the VPS is still deleted.
+        result, calls = self.run_server("stop", VPS="1", PUBLISH_FAIL="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("could not publish world.zip", result.stderr)
+        self.assertTrue(self.find(calls, "destroy"))
+
     def test_stop_local_never_backs_up(self):
         result, calls = self.run_server("stop", LOCAL="1")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -168,6 +182,7 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(self.find(calls, "backup now"))
         self.assertFalse(self.find(calls, "destroy"))
         self.assertFalse(self.find(calls, "ssh"))
+        self.assertFalse(self.find(calls, "publish-world"))
         self.assertIn("nothing is saved to R2", result.stdout)
 
     def test_only_the_vps_deploy_enables_backups(self):
