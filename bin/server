@@ -142,10 +142,28 @@ vault_copy() {
     --include "/config" --include "/keys/**" --include "/data/**" \
     --include "/index/**" --include "/snapshots/**" --transfers 8 --stats-one-line --stats 30s
 }
+# Runs `bin/server <hidden command>` with both secret files decrypted into its
+# environment, on the laptop only.
+with_all_secrets() {
+  sops exec-env "$ROOT/secrets/app.enc.env" \
+    "$(printf '%q ' sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" "$@")")"
+}
 vault() {
   say "Copying the backups into the vault bucket ($VAULT_BUCKET)..."
-  sops exec-env "$ROOT/secrets/app.enc.env" \
-    "$(printf '%q ' sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _vault-copy)")"
+  with_all_secrets _vault-copy
+}
+
+# Pauses the backup alert check (healthchecks.io) while the server is stopped,
+# so the missing pings don't alert. The next backup ping resumes it. Does
+# nothing unless BACKUP_PING_URL (app) and HEALTHCHECKS_API_KEY (infra) are set.
+pause_alerts() {
+  [[ -n "${BACKUP_PING_URL:-}" && -n "${HEALTHCHECKS_API_KEY:-}" ]] || return 0
+  local check=${BACKUP_PING_URL%/}
+  check=${check##*/}
+  [[ "$check" =~ ^[0-9a-f-]{36}$ ]] || { echo "BACKUP_PING_URL must be a UUID ping URL" >&2; return 1; }
+  # The API key goes to curl on stdin, never in its arguments.
+  printf 'header = "X-Api-Key: %s"\n' "$HEALTHCHECKS_API_KEY" |
+    curl -fsS -m 10 -K - -X POST "https://healthchecks.io/api/v3/checks/$check/pause" >/dev/null
 }
 
 # --- Pruning -------------------------------------------------------------------
@@ -302,6 +320,8 @@ stop() {
   # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
   sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _forget-device "$HOST")" ||
     echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
+  with_all_secrets _pause-alerts ||
+    echo "warning: could not pause the backup alert check; expect an alert" >&2
   vault || echo "warning: could not copy the backups into the vault; run 'bin/server vault' later" >&2
   say "Stopped. The world is safe in R2."
 }
@@ -364,6 +384,7 @@ case "${1:-} ${2:-}" in
   "prune "*) prune "${2:-}" ;;
   "vault "*) vault ;;
   "_vault-copy "*) vault_copy ;;
+  "_pause-alerts "*) pause_alerts ;;
   "tofu "*) shift; tf_init; tf "$@" ;;
   "_forget-device "*) forget_device "$2" ;;
   "-h "* | "--help "* | "help "*) usage ;;

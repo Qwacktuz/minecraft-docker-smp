@@ -142,6 +142,16 @@ services:
       RCON_PASSWORD: "${RCON_PASSWORD:?Set RCON_PASSWORD in .env}"
       PAUSE_IF_NO_PLAYERS: true
 
+      # Alerts: after every backup, ping the healthchecks.io check in
+      # BACKUP_PING_URL (app.enc.env) with the exit status; a failure alerts at
+      # once, with the log attached. No ping for a day alerts too. `bin/server
+      # stop` pauses the check. Without BACKUP_PING_URL this does nothing.
+      BACKUP_PING_URL: "${BACKUP_PING_URL:-}"
+      POST_BACKUP_SCRIPT: |
+        [ -n "$$BACKUP_PING_URL" ] || exit 0
+        curl -fsS -m 10 --retry 3 --data-binary "@$$2" "$$BACKUP_PING_URL/$$1" >/dev/null ||
+          echo "could not reach the backup alert check" >&2
+
       # Compression & Size Savings (exclude bluemap)
       EXCLUDES: "bluemap,logs,cache,emotes,*.tmp,web,*.map"
 

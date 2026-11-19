@@ -122,7 +122,7 @@ class ServerTests(unittest.TestCase):
         log.touch()
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
-        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE"):
+        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY"):
             env.pop(variable, None)
         env.update({key: value for key, value in flags.items()})
         result = subprocess.run(["bash", str(root / "bin/server"), *argv], env=env,
@@ -164,6 +164,24 @@ class ServerTests(unittest.TestCase):
         for call in calls:
             if call["argv"][0] == "ssh":
                 self.assertNotIn("VAULT", " ".join(call["argv"]) + call["stdin"])
+
+    def test_stop_pauses_the_alert_check_after_destroy(self):
+        result, calls = self.run_server("stop", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLess(self.find(calls, "destroy")[0], self.find(calls, "_pause-alerts")[0])
+
+    def test_pause_alerts_keeps_the_api_key_out_of_argv(self):
+        url = "https://hc-ping.com/0f75a81d-70e5-43c5-b892-f33c524284f2"
+        result, calls = self.run_server("_pause-alerts", BACKUP_PING_URL=url,
+                                        HEALTHCHECKS_API_KEY="hcw_secretkey")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        curl = calls[self.find(calls, "api/v3/checks/0f75a81d-70e5-43c5-b892-f33c524284f2/pause")[0]]
+        self.assertNotIn("hcw_secretkey", " ".join(curl["argv"]))
+        self.assertIn("X-Api-Key: hcw_secretkey", curl["stdin"])
+        # Unconfigured: nothing happens.
+        result, calls = self.run_server("_pause-alerts")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.find(calls, "healthchecks.io"))
 
     def test_stop_aborts_when_snapshot_is_stale(self):
         result, calls = self.run_server("stop", VPS="1", SNAP_TIME=iso(-3600))
