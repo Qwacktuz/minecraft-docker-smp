@@ -1,0 +1,6 @@
+# Inputs are pinned in devenv.lock; refresh them with `devenv update`.
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+  git-hooks:
+    url: github:cachix/git-hooks.nix

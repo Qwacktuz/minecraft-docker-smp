@@ -23,7 +23,7 @@ existing production stack.
 
 ## Configuration
 
-Requirements: a Linux Docker host, Docker Compose v2.20+ (with `up --wait`),
+Requirements: a Docker host with Compose v2.20+ (with `up --wait`),
 Tailscale, SOPS, Bash, and the credentials described in [infra/README.md](infra/README.md).
 The default host configuration targets AMD64 and an 8 GB server; it is not a
 complete portable homelab/local-copy installer yet.
@@ -48,28 +48,47 @@ docker compose ps
 This starts a new world when `data/minecraft` is empty. For recovery, follow
 [backup and restore](docs/how2backuprestore.md) before starting the stack.
 
-## Deployment
+## Start and stop
 
-The production workflow runs on pushes to `main` or manual dispatch. It serializes
-runs, requires validation to pass, applies infrastructure, joins Tailscale as `tag:ci`, waits for cloud-init,
-locks deployment on the host, and checks out the triggering Git commit.
+One command, run from your laptop, decides where the world runs:
 
-`scripts/deploy.sh` decrypts secrets into a private temporary file, validates the
-Tailscale address and Compose settings, and pulls images before replacing `.env`.
-It notifies players, requests a save, and waits for Minecraft health after updating.
-Preflight failures preserve the existing `.env`. Images are not globally pruned.
+```bash
+bin/server start local   # Docker on this machine: localhost:25565
+bin/server start vps     # create the Hetzner VPS and run there: mc.cactuz.dev
+bin/server stop          # final backup to R2, shut down, delete the VPS
+bin/server status        # where is it running, and when was the last backup?
+```
+
+**There is one world, and it lives in R2.** `stop` takes a backup and only shuts
+down once a snapshot newer than the stop request appears in R2. Otherwise it
+aborts and leaves the server running. `start` always restores the newest
+snapshot (the previous local data is kept in `data/minecraft.previous`). The
+world runs in one place at a time: `start` refuses while it runs elsewhere.
+Running `start` again where it already runs just redeploys, without a restore.
+A brand-new world needs `NEW_WORLD=1` when R2 has no snapshots.
+
+Deleting the VPS removes the server, firewall, DNS records and Tailscale device.
+The R2 backups and the OpenTofu state are separate and are never deleted.
+
+**Laptop requirements:** [devenv](https://devenv.sh) provides every tool
+(see [Development environment](#development-environment)). Outside it you need
+a running Docker daemon (OrbStack or Docker Desktop), the Tailscale app, and your
+Age key in `SOPS_AGE_KEY_FILE` (default `~/.config/sops/age/keys.txt`). OpenTofu credentials come from
+`infra/.env`, `infra/local.auto.tfvars` and `infra/backend.conf`.
+`start vps` deploys the current commit from GitHub, so push it first.
+
+Under the hood: `bin/server` runs `tofu apply`/`destroy` and calls
+`scripts/deploy.sh` (locally, or on the VPS over Tailscale SSH). The deploy
+script decrypts secrets, restores the world when asked, and waits for health.
+CI only validates; pushing to `main` never creates or changes a server.
 
 **Existing installations:** complete the [one-time Loki migration](docs/loki-migration.md)
 before the first deployment of the explicit Loki storage configuration. The deploy
 script rejects the old layout to protect historical logs.
 
-This remains a single-server deployment with downtime. Image/mod versions are
-still mutable, infrastructure still auto-applies, and recovery scripts still need
-further hardening. See the [baseline review](docs/production-readiness-review.md).
-
 ## Operations
 
-Run from the application directory on the server:
+Run from the application directory (`~/app` on the VPS, the repository locally):
 
 ```bash
 docker compose logs -f minecraft-service
@@ -87,19 +106,26 @@ Management endpoints use the configured `TS_IP`: Grafana `3000`, Prometheus `909
 Loki `3100`, Alloy `12345`, and Arcane `3552`. RCON is not published on the host.
 Tailnet policy must restrict access to the appropriate administrators.
 
-## Validation and repository layout
+## Development environment
+
+`devenv.nix` is the single source of tool versions (pinned in `devenv.lock`):
+OpenTofu, Python, the Docker CLI with Compose, SOPS, Age, SecretSpec, ShellCheck,
+actionlint and jq. Install [devenv](https://devenv.sh/getting-started/), then either
+run `direnv allow` once (the shell loads on `cd`) or use `devenv shell`.
 
 ```bash
-python3 -m unittest discover -s tests -v
-shellcheck scripts/deploy.sh
-actionlint
-tofu -chdir=infra fmt -check
-tofu -chdir=infra init -backend=false -lockfile=readonly
-tofu -chdir=infra validate
+server start local   # bin/server, available on PATH in the shell
+validate             # every check: tests, lint, tofu, Alloy/Loki configs
+devenv test          # git hooks + validate in a fresh shell; this is what CI runs
+devenv update        # bump the pinned tool versions (commit devenv.lock)
 ```
 
-The validation workflow also checks Alloy/Loki configuration using their container
-images. Tests use dummy credentials and mocked deployment commands; they never
+Commits run ShellCheck, actionlint, nixfmt and `tofu fmt` hooks. The Alloy/Loki
+checks need Docker running; locally they're skipped with a notice when it isn't.
+
+## Validation and repository layout
+
+CI runs `devenv test` on every push and pull request. Tests use dummy credentials and mocked deployment commands; they never
 contact production. A real restore-and-boot drill is still necessary before rollout.
 
 - `compose.yml`, `scripts/`: active runtime and operations.
