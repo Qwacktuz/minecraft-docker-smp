@@ -18,6 +18,7 @@ HOST=${TS_HOST:-mc-prod}                 # Tailscale name; infra var.server_name
 SSH_USER=${SSH_USER:-deployer}           # infra var.username
 REPO=${REPO:-https://github.com/Qwacktuz/minecraft-docker-smp.git}
 AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
+WORLD=data/minecraft/world/level.dat     # present once a world has been restored
 
 die() { echo "server: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
@@ -133,8 +134,15 @@ start_vps() {
   [[ -z "$(git -c core.fileMode=false status --porcelain --untracked-files=no)" ]] ||
     echo "warning: uncommitted changes are not deployed; the VPS runs ${sha:0:7}" >&2
 
+  # Restore unless the VPS already holds a world (a half-finished start has none).
   local restore=latest
-  vps_exists && restore= && say "VPS already exists; redeploying without restoring."
+  if vps_exists; then
+    remote true || die "the VPS exists but is unreachable over Tailscale SSH"
+    if remote "test -f ~/app/$WORLD"; then
+      restore=
+      say "The VPS already runs the world; redeploying without restoring."
+    fi
+  fi
 
   say "Creating or updating the VPS..."
   tf apply -input=false -auto-approve
@@ -145,13 +153,15 @@ start_vps() {
     (( ++tries <= 60 )) || die "$HOST did not become reachable over Tailscale SSH"
     sleep 10
   done
+  # Separate session: the deploy must log in after cloud-init has added the
+  # user to the docker group, or it can't reach the Docker socket.
+  remote "sudo cloud-init status --wait >/dev/null" || die "cloud-init failed on $HOST"
 
   say "Deploying ${sha:0:7}..."
   # The Age key travels over SSH stdin: never in arguments, env files, or disk.
   # shellcheck disable=SC2016 # expanded on the VPS
   local script='set -eu
 SOPS_AGE_KEY=$(cat); export SOPS_AGE_KEY
-sudo cloud-init status --wait >/dev/null
 mkdir -p ~/app && cd ~/app
 exec 9>~/.minecraft-deploy.lock; flock -w 1800 9
 [ -d .git ] || git clone -q "$REPO" .

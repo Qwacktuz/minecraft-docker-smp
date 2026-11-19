@@ -47,6 +47,8 @@ elif name == "docker":
     if "snapshots" in args:
         snapshots()
 elif name == "ssh":
+    if "test -f" in command and not flag("WORLD_ON_VPS"):
+        sys.exit(1)
     if "date -u +%s" in command:
         print(int(time.time()))
     if "backup now" in command and flag("BACKUP_FAIL"):
@@ -181,6 +183,21 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         deploy = calls[self.find(calls, "deploy.sh")[0]]["argv"]
         self.assertEqual(deploy, ["deploy.sh", "RESTORE=latest"])
+
+    def test_existing_vps_restores_only_without_a_world(self):
+        for world, expected in (("1", "RESTORE=''"), ("", "RESTORE=latest")):
+            with self.subTest(world_on_vps=bool(world)):
+                result, calls = self.run_server("start", "vps", VPS="1", WORLD_ON_VPS=world)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                deploy = calls[self.find(calls, "scripts/deploy.sh")[0]]
+                self.assertIn(expected + " ", " ".join(deploy["argv"]) + " ")
+
+    def test_cloud_init_wait_is_a_separate_session(self):
+        _, calls = self.run_server("start", "vps")
+        wait = self.find(calls, "cloud-init status --wait")[0]
+        deploy = self.find(calls, "scripts/deploy.sh")[0]
+        self.assertLess(wait, deploy)
+        self.assertNotIn("cloud-init", " ".join(calls[deploy]["argv"]))
 
     def test_restart_in_same_place_does_not_restore(self):
         result, calls = self.run_server("start", "local", LOCAL="1")

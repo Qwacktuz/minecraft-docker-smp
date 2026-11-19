@@ -62,6 +62,13 @@ if [[ "${RESTORE:-}" == latest ]]; then
   fi
 fi
 
+# Never start without a world: Minecraft would generate a new one and the backup
+# container would upload it over the real one's "latest".
+if [[ ! -f data/minecraft/world/level.dat && "${NEW_WORLD:-}" != 1 ]]; then
+  echo "ERROR: No world in data/minecraft. Use RESTORE=latest, or NEW_WORLD=1 for a fresh world." >&2
+  exit 1
+fi
+
 echo "Updating containers and waiting for health checks..."
 if ! "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 600; then
   "${compose[@]}" ps >&2 || true

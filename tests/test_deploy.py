@@ -32,6 +32,9 @@ if name == "docker":
         assert Path(".env").read_text() == "OLD=preserved\n"
     if stage in ("config", "pull", "up") and stage in args:
         sys.exit(1)
+    if "restore" in args:  # restic restore writes the world into data/minecraft
+        Path("data/minecraft/world").mkdir(parents=True, exist_ok=True)
+        Path("data/minecraft/world/level.dat").touch()
     if "snapshots" in args:
         print("[]" if stage == "no-snapshots" else '[{"id": "abc"}]')
     if "ps" in args:
@@ -40,7 +43,7 @@ if name == "docker":
 
 
 class DeployTests(unittest.TestCase):
-    def run_deploy(self, stage="", **extra):
+    def run_deploy(self, stage="", world=True, **extra):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -51,6 +54,9 @@ class DeployTests(unittest.TestCase):
             path.write_text(f"#!{sys.executable}\n" + MOCK)
             path.chmod(0o755)
         (root / ".env").write_text("OLD=preserved\n")
+        if world:
+            (root / "data/minecraft/world").mkdir(parents=True)
+            (root / "data/minecraft/world/level.dat").touch()
         log = root / "commands.jsonl"
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log),
@@ -105,6 +111,14 @@ class DeployTests(unittest.TestCase):
         _, result, calls = self.run_deploy("no-snapshots", RESTORE="latest", NEW_WORLD="1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any("restore" in call for call in calls))
+
+    def test_missing_world_is_never_started(self):
+        _, result, calls = self.run_deploy(world=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("No world", result.stderr)
+        self.assertFalse(any("up" in call for call in calls))
+        _, result, _ = self.run_deploy(world=False, RESTORE="latest")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_health_failure_is_not_reported_as_success(self):
         _, result, calls = self.run_deploy("up")
