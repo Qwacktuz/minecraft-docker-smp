@@ -105,8 +105,38 @@ backups). Edit them with `sops secrets/<file>`. Nothing secret is stored anywher
 else, and CI needs none. Each Cloudflare token reaches only its own buckets:
 [infra/README.md](infra/README.md#cloudflare-tokens-and-buckets).
 
-Every image is pinned to a version plus digest (`compose.yml`, `scripts/lib.sh`),
-and so are CI's actions and devenv. Updates happen only when you bump them.
+## Alerts and updates
+
+**Backup alerts** come from a [healthchecks.io](https://healthchecks.io) check:
+- **After every backup**, the backup container pings the check. A failed backup
+  alerts at once, with the restic log attached.
+- **No successful backup for a day while the server runs** also alerts. That
+  catches a stuck backup container, or a VPS left running idle.
+- **`server stop`** pauses the check, and the first backup after the next start
+  resumes it.
+
+Set it up once:
+1. Create a check with period 1 day and grace 6 hours.
+2. Put its UUID ping URL into `app.enc.env` as `BACKUP_PING_URL`.
+3. Put a project API key into `infra.enc.env` as `HEALTHCHECKS_API_KEY`; it's used
+   only for pausing.
+
+Without them, nothing is sent.
+
+**Updates.** Every image is pinned to a version plus digest (`compose.yml`,
+`scripts/lib.sh`), and so are CI's actions, devenv and the OpenTofu providers.
+[Renovate](https://github.com/apps/renovate) (`renovate.json`) checks them every
+Monday morning:
+1. It opens a pull request against `dev` for each update. CI tests it.
+2. You merge it.
+3. It goes live at the next `server start vps`.
+
+The Dependency Dashboard issue lists everything pending. Not covered:
+- `devenv.lock`: run `devenv update`.
+- The SOPS version and checksums in `infra/cloud-init.yaml`.
+- MCA Selector in `scripts/prune.sh`.
+
+Bump those by hand.
 
 ## Development environment
 

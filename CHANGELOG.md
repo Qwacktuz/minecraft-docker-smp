@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased: backup alerts and Renovate (2026-11-19)
+
+- **Backup alerts.** After every backup, the backup container pings the
+  healthchecks.io check in `BACKUP_PING_URL`. The ping carries the exit status
+  and the log, so a failure alerts at once. A day without a ping alerts too.
+  `server stop` pauses the check through the API (`HEALTHCHECKS_API_KEY`, which
+  goes to curl on stdin). Nothing is sent until both are set. The hook was tested
+  in the pinned backup image against a local listener.
+- **Renovate** (`renovate.json`) opens weekly PRs against `dev` for the pinned
+  images (compose.yml and scripts/lib.sh, grouped where they repeat), CI actions,
+  devenv and the OpenTofu provider lock. Validated, and a local dry run found
+  every dependency.
+
 ## Unreleased: hardening (2026-11-19)
 
 - **Least-privilege Cloudflare tokens.** DNS, OpenTofu state, VPS (backups and
