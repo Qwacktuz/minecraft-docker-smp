@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: script cleanups (2026-11-19)
+
+No behaviour changes.
+
+- **One way to decrypt.** `bin/server` runs everything that needs secrets
+  through one helper, `secrets infra|app|all <hidden command>`, which re-runs
+  `bin/server` under `sops exec-env`. It replaces the hand-quoted nested
+  `sops exec-env` calls (tofu, tofu init, `_forget-device`, `_vault-copy`,
+  `_pause-alerts`).
+
 ## Unreleased: backup alerts and Renovate (2026-11-19)
 
 - **Backup alerts.** After every backup, the backup container pings the

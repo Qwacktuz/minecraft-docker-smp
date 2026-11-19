@@ -112,7 +112,7 @@ class ServerTests(unittest.TestCase):
             '\\"stdin\\": \\"\\"}" >> "$MOCK_LOG"\n')
         mocks = root / "mocks"
         mocks.mkdir()
-        for name in ("tofu", "docker", "ssh", "git", "tailscale", "sops", "sleep", "curl"):
+        for name in ("tofu", "docker", "ssh", "git", "tailscale", "sops", "sleep", "curl", "rclone"):
             path = mocks / name
             path.write_text(f"#!{sys.executable}\n" + MOCK)
             path.chmod(0o755)
@@ -182,6 +182,12 @@ class ServerTests(unittest.TestCase):
         result, calls = self.run_server("_pause-alerts")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.find(calls, "healthchecks.io"))
+
+    def test_vault_copy_runs_under_both_secret_files(self):
+        _, calls = self.run_server("vault")
+        files = [Path(call["argv"][2]).name for call in calls if call["argv"][0] == "sops"]
+        self.assertEqual(files, ["app.enc.env", "infra.enc.env"])
+        self.assertIn("_vault-copy", calls[-1]["argv"][3])
 
     def test_stop_aborts_when_snapshot_is_stale(self):
         result, calls = self.run_server("stop", VPS="1", SNAP_TIME=iso(-3600))

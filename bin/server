@@ -31,21 +31,38 @@ need() { for tool; do command -v "$tool" >/dev/null || die "'$tool' is not insta
 
 # --- OpenTofu (VPS lifecycle) ------------------------------------------------
 
-# Provider and state-backend credentials live encrypted in secrets/infra.enc.env.
-# They are decrypted only into the environment of each tofu process.
+# Provider and state-backend credentials live encrypted in secrets/infra.enc.env,
+# app secrets (the backups' keys) in secrets/app.enc.env. They are decrypted
+# only into the environment of the process that needs them.
 INFRA_SECRETS="$ROOT/secrets/infra.enc.env"
+APP_SECRETS="$ROOT/secrets/app.enc.env"
+# `secrets infra|app|all <hidden command> [args]` runs `bin/server <hidden
+# command>` with those secret files decrypted into its environment.
+secrets() {
+  local files=() command i
+  case $1 in
+    infra) files=("$INFRA_SECRETS") ;;
+    app) files=("$APP_SECRETS") ;;
+    all) files=("$APP_SECRETS" "$INFRA_SECRETS") ;;
+    *) die "unknown secrets '$1'" ;;
+  esac
+  shift
+  # sops runs its command through a shell, so each layer is quoted once.
+  command=$(printf '%q ' "$0" "$@")
+  for (( i = ${#files[@]} - 1; i > 0; i-- )); do
+    command=$(printf '%q ' sops exec-env "${files[i]}" "$command")
+  done
+  sops exec-env "${files[0]}" "$command"
+}
 tf() {
   need sops tofu
-  sops exec-env "$INFRA_SECRETS" "$(printf '%q ' tofu -chdir="$ROOT/infra" "$@")"
+  secrets infra _tofu "$@"
 }
 TF_READY=
 tf_init() {
   [[ -n "$TF_READY" ]] && return
   need sops tofu
-  # $TOFU_BACKEND_* are expanded inside exec-env, from the decrypted file.
-  # shellcheck disable=SC2016
-  sops exec-env "$INFRA_SECRETS" "$(printf '%q ' tofu -chdir="$ROOT/infra" init -input=false -reconfigure)"' -backend-config="bucket=$TOFU_BACKEND_BUCKET" -backend-config="endpoint=$TOFU_BACKEND_ENDPOINT"' \
-    >/dev/null || die "tofu init failed"
+  secrets infra _tofu-init >/dev/null || die "tofu init failed"
   TF_READY=1
 }
 vps_exists() {
@@ -142,15 +159,9 @@ vault_copy() {
     --include "/config" --include "/keys/**" --include "/data/**" \
     --include "/index/**" --include "/snapshots/**" --transfers 8 --stats-one-line --stats 30s
 }
-# Runs `bin/server <hidden command>` with both secret files decrypted into its
-# environment, on the laptop only.
-with_all_secrets() {
-  sops exec-env "$ROOT/secrets/app.enc.env" \
-    "$(printf '%q ' sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" "$@")")"
-}
 vault() {
   say "Copying the backups into the vault bucket ($VAULT_BUCKET)..."
-  with_all_secrets _vault-copy
+  secrets all _vault-copy
 }
 
 # Pauses the backup alert check (healthchecks.io) while the server is stopped,
@@ -318,16 +329,16 @@ stop() {
   remote "sudo tailscale logout" 2>/dev/null || true
   tf destroy -input=false -auto-approve
   # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
-  sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _forget-device "$HOST")" ||
+  secrets infra _forget-device "$HOST" ||
     echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
-  with_all_secrets _pause-alerts ||
+  secrets all _pause-alerts ||
     echo "warning: could not pause the backup alert check; expect an alert" >&2
   vault || echo "warning: could not copy the backups into the vault; run 'bin/server vault' later" >&2
   say "Stopped. The world is safe in R2."
 }
 
-# Deletes tailnet devices named $1 via the Tailscale API. Runs under sops
-# exec-env, which provides the OAuth client credentials.
+# Deletes tailnet devices named $1 via the Tailscale API. Runs under
+# `secrets infra`, which provides the OAuth client credentials.
 # shellcheck disable=SC2154 # TF_VAR_* come from sops exec-env
 forget_device() {
   local api=https://api.tailscale.com/api/v2 token id
@@ -376,6 +387,13 @@ prune() {
 
 usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
+# Runs tofu init with the state bucket from the decrypted infra secrets.
+# shellcheck disable=SC2154 # TOFU_BACKEND_* come from secrets/infra.enc.env
+tofu_init() {
+  tofu -chdir="$ROOT/infra" init -input=false -reconfigure \
+    -backend-config="bucket=${TOFU_BACKEND_BUCKET:-}" -backend-config="endpoint=${TOFU_BACKEND_ENDPOINT:-}"
+}
+
 case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
@@ -383,10 +401,13 @@ case "${1:-} ${2:-}" in
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
   "vault "*) vault ;;
+  "tofu "*) shift; tf_init; tf "$@" ;;
+  "-h "* | "--help "* | "help "*) usage ;;
+  # Hidden commands: `secrets` runs these with the decrypted values in the environment.
+  "_tofu "*) shift; tofu -chdir="$ROOT/infra" "$@" ;;
+  "_tofu-init "*) tofu_init ;;
   "_vault-copy "*) vault_copy ;;
   "_pause-alerts "*) pause_alerts ;;
-  "tofu "*) shift; tf_init; tf "$@" ;;
   "_forget-device "*) forget_device "$2" ;;
-  "-h "* | "--help "* | "help "*) usage ;;
   *) usage 1 >&2 ;;
 esac
