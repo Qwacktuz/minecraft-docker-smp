@@ -129,7 +129,8 @@ start_vps() {
   git fetch --quiet "$remote_name"
   [[ -n "$(git branch -r --contains "$sha")" ]] ||
     die "commit ${sha:0:7} is not pushed to '$remote_name'; push it first"
-  [[ -z "$(git status --porcelain --untracked-files=no)" ]] ||
+  # Ignore mode-only changes (this checkout has many 644->755 flips).
+  [[ -z "$(git -c core.fileMode=false status --porcelain --untracked-files=no)" ]] ||
     echo "warning: uncommitted changes are not deployed; the VPS runs ${sha:0:7}" >&2
 
   local restore=latest
