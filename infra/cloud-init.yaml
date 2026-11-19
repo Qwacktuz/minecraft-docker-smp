@@ -1,8 +1,13 @@
 #cloud-config
 
+# The docker group exists before the user and before tailscaled starts:
+# Tailscale SSH sessions only get the groups a user had when tailscaled started.
+groups:
+  - docker
+
 users:
   - name: ${username}
-    groups: sudo
+    groups: sudo, docker
     shell: /bin/bash
     sudo: ["ALL=(ALL) NOPASSWD:ALL"]
     ssh_authorized_keys:
@@ -14,6 +19,22 @@ swap:
   size: 2G
   maxsize: 2147483648
 
+# Docker and Tailscale come from their signed apt repositories. The signing
+# keys are in infra/keys/ (fingerprints in the comments), so nothing is piped
+# from the internet into a shell.
+apt:
+  sources:
+    docker.list:
+      # 9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/debian $RELEASE stable"
+      key: |
+        ${indent(8, docker_key)}
+    tailscale.list:
+      # 2596 A99E AAB3 3821 893C  0A79 458C A832 957F 5868
+      source: "deb [signed-by=$KEY_FILE] https://pkgs.tailscale.com/stable/debian $RELEASE main"
+      key: |
+        ${indent(8, tailscale_key)}
+
 package_update: true
 package_upgrade: true
 packages:
@@ -21,6 +42,12 @@ packages:
   - git
   - vim
   - ufw
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+  - tailscale
 
 write_files:
   - path: /etc/ssh/sshd_config.d/minecraft-hardening.conf
@@ -33,23 +60,25 @@ runcmd:
   - set -e
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
 
-  # Docker first: Tailscale SSH sessions only get groups that existed when
-  # tailscaled started, so the docker group must be set up before it.
-  # Install Docker via official script
-  - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
-  - usermod -aG docker ${username}
 
-  # Install & initialize Tailscale
-  - curl -fsSL https://tailscale.com/install.sh | sh
+  # Tailscale (installed above); restarted so the user's docker group applies.
   - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
   - systemctl restart tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --hostname=${hostname} --reset
 
-  # Install SOPS CLI
-  - curl -LO https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
-  - mv sops-v3.13.3.linux.amd64 /usr/local/bin/sops
-  - chmod +x /usr/local/bin/sops
+  # SOPS, checked against the release's SHA-256 for this CPU architecture.
+  - |
+    set -e
+    arch=$(dpkg --print-architecture)
+    case "$arch" in
+      amd64) sum=e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b ;;
+      arm64) sum=53b0abacd38ef1b12a66d6c100956691b9cefce018d91f81e73ddf7438b94d77 ;;
+      *) echo "no SOPS checksum for $arch" >&2; exit 1 ;;
+    esac
+    curl -fsSLo /tmp/sops "https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.$arch"
+    echo "$sum  /tmp/sops" | sha256sum -c -
+    install -m 755 /tmp/sops /usr/local/bin/sops
 
   # Apply SSH Hardening Config
   - systemctl reload sshd || systemctl reload ssh

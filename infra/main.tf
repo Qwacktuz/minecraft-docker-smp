@@ -24,6 +24,9 @@ data "cloudinit_config" "minecraft_cfg" {
       hostname    = var.server_name
       username    = var.username
       ssh_pub_key = var.ssh_public_key
+      # apt signing keys for Docker and Tailscale (fingerprints in cloud-init.yaml)
+      docker_key    = file("${path.module}/keys/docker.asc")
+      tailscale_key = file("${path.module}/keys/tailscale.asc")
     })
   }
 }
