@@ -18,7 +18,6 @@
     # Secrets
     sops
     age
-    secretspec # used by the bin/smp local-core experiment
 
     # Checks (mirrors .github/workflows/validate.yml)
     shellcheck
@@ -26,7 +25,7 @@
     jq
   ];
 
-  languages.python.enable = true; # scripts/smp.py and tests need Python 3.11+
+  languages.python.enable = true; # tests and bin/server's timestamp parsing
   languages.opentofu.enable = true;
 
   # Secrets are never loaded into the shell: they stay SOPS-encrypted in secrets/
@@ -48,10 +47,9 @@
       set -euo pipefail
       cd "$DEVENV_ROOT"
       for script in scripts/*.sh bin/server; do bash -n "$script"; done
-      shellcheck scripts/deploy.sh bin/smp bin/server
+      shellcheck scripts/deploy.sh bin/server
       actionlint
       python3 -m unittest discover -s tests
-      bin/smp validate
       tofu -chdir=infra fmt -check
       tofu -chdir=infra init -backend=false -lockfile=readonly >/dev/null
       tofu -chdir=infra validate
@@ -75,7 +73,7 @@
     shellcheck = {
       enable = true;
       # Same files as CI; the older scripts/*.sh and archive/ aren't lint-clean yet.
-      files = "^(scripts/deploy\\.sh|bin/(smp|server))$";
+      files = "^(scripts/deploy\\.sh|bin/server)$";
     };
     actionlint.enable = true;
     nixfmt.enable = true;

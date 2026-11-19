@@ -8,10 +8,6 @@ Day to day, everything goes through one command, `bin/server start local|vps` /
 `stop` (see [Start and stop](#start-and-stop)); tools come from
 [devenv](#development-environment). Recent changes are in [CHANGELOG.md](CHANGELOG.md).
 
-A longer-term replacement architecture is being explored separately in the
-[local-core checkpoint](docs/local-core-checkpoint.md) (`bin/smp`, its own Compose
-file); the commands below describe the production stack.
-
 ## Components
 
 - **Game:** Fabric, online authentication, enforced whitelist, voice/webcam mods.
@@ -113,7 +109,7 @@ Tailnet policy must restrict access to the appropriate administrators.
 ## Development environment
 
 `devenv.nix` is the single source of tool versions (pinned in `devenv.lock`):
-OpenTofu, Python, the Docker CLI with Compose, SOPS, Age, SecretSpec, ShellCheck,
+OpenTofu, Python, the Docker CLI with Compose, SOPS, Age, ShellCheck,
 actionlint and jq. Install [devenv](https://devenv.sh/getting-started/), then either
 run `direnv allow` once (the shell loads on `cd`) or use `devenv shell`.
 
