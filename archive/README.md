@@ -15,6 +15,10 @@ without reviewing their assumptions and updating their versions.
 | `deploy-via-act.sh` | `scripts/deploy_local.sh`; invokes production CI, not a local instance |
 | `static/tux.jpeg` | Unreferenced image; the active server icon remains in `static/` |
 | `how2vibe.md` | Personal tool note, unrelated to operation |
+| `docs/production-readiness-review.md` | `docs/`; dated baseline review whose line references point at the removed `deploy.yml` |
+| `scripts/backup_and_clean.sh` | `scripts/`; unused two-line stub (`bin/server stop` takes the final backup) |
+| `geminiignore` | `.geminiignore`; generic template (node_modules, dist) unrelated to this project |
+| `.github/workflows/deploy.yml` (deleted, see Git history) | Push-to-main provisioning, replaced by `bin/server` |
 
 The historical SBOM remains large. Moving it clarifies ownership but does not
 reduce clone size or rewrite Git history. License material remains in `docs/LICENSE`.

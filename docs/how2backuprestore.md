@@ -62,6 +62,7 @@ after rollback and verify health before reopening the server.
 5. Enable destination backups, verify a successful snapshot, and retain the old host
    for a defined rollback period before retiring it.
 
-Infrastructure replacement still has outstanding safeguards; see the baseline
-[review](production-readiness-review.md). Grafana/Arcane state is not included in the
+`bin/server stop` and `start` automate the final backup and the restore of
+`latest` for the normal VPS/local round trip. The archived baseline
+[review](../archive/docs/production-readiness-review.md) lists older safeguards. Grafana/Arcane state is not included in the
 Minecraft backup. Loki's storage transition has its own [migration](loki-migration.md).
