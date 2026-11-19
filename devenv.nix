@@ -60,7 +60,7 @@
   git-hooks.hooks = {
     shellcheck = {
       enable = true;
-      # Same files as CI; the older scripts/*.sh and archive/ aren't lint-clean yet.
+      # The older backup scripts in scripts/ aren't lint-clean yet.
       files = "^(scripts/deploy\\.sh|bin/server)$";
     };
     actionlint.enable = true;

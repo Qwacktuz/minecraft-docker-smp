@@ -9,9 +9,7 @@ sync-secrets.sh
 .env.local
 .env.secrets
 .env.*
-!.env.example
 age.key
-.loki-storage-migrated
 .state/
 secrets/local/
 .secrets
@@ -54,9 +52,6 @@ __pycache__/
 data/
 backups/
 
-# Local prometheus data
-prometheus_data/
-grafana_data/
 
 # OS specific
 .DS_Store

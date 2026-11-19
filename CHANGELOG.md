@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased: simplified to the game and its backups (2026-11-19)
+
+- Removed the monitoring stack (Grafana, Prometheus, Loki, Alloy), Arcane,
+  the `bin/smp` local-core experiment, `archive/`, `.env.example` and the
+  Loki migration guard. All of them are in Git history.
+- Compose runs only `minecraft-service` and `backup`. With no management
+  ports left, deploys no longer need the Tailscale IP.
+- Infra: the firewall and UFW allow only the game, voice and webcam ports;
+  no exit node; fewer host packages; the unused `http` provider is gone.
+- `bin/server stop` also deletes the old Tailscale device, so the next VPS
+  keeps the `mc-prod` name.
+- Rotated the Cloudflare token and the R2 secret derived from it.
+
 ## Unreleased — 2026-11-19 (branch `feat/server-lifecycle-devenv`)
 
 ### One start/stop command
@@ -33,5 +46,5 @@
 
 ### Housekeeping
 - Archived `docs/production-readiness-review.md`, `scripts/backup_and_clean.sh`
-  and `.geminiignore` (see `archive/README.md`).
+  and `.geminiignore` (later removed with `archive/`).
 - `.devenv/` is no longer tracked.

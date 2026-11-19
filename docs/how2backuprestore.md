@@ -1,7 +1,7 @@
 # Backup and recovery
 
-Run commands from `$HOME/app` on the server. The current scripts assume that path
-and read `.env` as shell syntax. They are not yet a fully automated disaster-recovery
+Run commands from the app directory (`~/app` on the VPS; set `APP_DIR` to use
+`restore-backup.sh` elsewhere). The scripts read `.env` as shell syntax. They are not yet a fully automated disaster-recovery
 system. Do not run restoration concurrently with deployment or other maintenance.
 
 ## Select a recovery point
@@ -48,21 +48,8 @@ The rollback script deletes the current world directory. Preserve any data you n
 first, stop the backup worker, and use the same maintenance lock. Recreate the worker
 after rollback and verify health before reopening the server.
 
-## Migrate to another host
+## Moving the world between hosts
 
-1. Keep the source host available. Create the destination with a fresh bootstrap
-   credential and independent identity; prepare its configuration without starting
-   Minecraft or scheduled backups.
-2. Restore the chosen snapshot and validate the destination in isolation. Local
-   test copies must not receive production backup write/prune credentials.
-3. During cutover, stop/fence the source and capture a final consistent recovery
-   point so validation time does not lose newer progress. Restore it at the destination.
-4. Verify health, world identity, permissions, and mod data before changing DNS and
-   reopening player access. Ensure only one world is authoritative.
-5. Enable destination backups, verify a successful snapshot, and retain the old host
-   for a defined rollback period before retiring it.
-
-`bin/server stop` and `start` automate the final backup and the restore of
-`latest` for the normal VPS/local round trip. The archived baseline
-[review](../archive/docs/production-readiness-review.md) lists older safeguards. Grafana/Arcane state is not included in the
-Minecraft backup. Loki's storage transition has its own [migration](loki-migration.md).
+`bin/server stop` takes and verifies a final backup; `bin/server start local|vps`
+restores the newest snapshot before the server starts. That is the normal way to
+move the world; use the manual steps above only to recover an *older* snapshot.
