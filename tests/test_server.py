@@ -68,6 +68,9 @@ elif name == "ssh":
         snapshots()
     if "tag --add pre-prune" in command:
         Path(os.environ["MOCK_LOG"] + ".tagged").touch()
+    if "restic" in command and " check " in command and flag("CHECK_FAIL"):
+        print("Fatal: repository contains errors")
+        sys.exit(1)
     if "publish-world.sh" in command and flag("PUBLISH_FAIL"):
         sys.exit(1)
     if "scripts/prune.sh" in command and flag("PRUNE_FAIL"):
@@ -143,6 +146,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Latest backup: unknown", result.stdout)
         self.assertNotIn("Traceback", result.stderr)
+
+    def test_stop_keeps_the_vps_when_the_integrity_check_fails(self):
+        result, calls = self.run_server("stop", VPS="1", CHECK_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("integrity check", result.stderr)
+        self.assertLess(self.find(calls, "backup now")[0], self.find(calls, "check --read-data-subset")[0])
+        self.assertFalse(self.find(calls, "compose down"))
+        self.assertFalse(self.find(calls, "destroy"))
+
+    def test_stop_copies_the_backups_into_the_vault_after_destroy(self):
+        result, calls = self.run_server("stop", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        vault = self.find(calls, "_vault-copy")[0]
+        self.assertLess(self.find(calls, "destroy")[0], vault)
+        # The vault key is only decrypted on the laptop, never sent to the VPS.
+        for call in calls:
+            if call["argv"][0] == "ssh":
+                self.assertNotIn("VAULT", " ".join(call["argv"]) + call["stdin"])
 
     def test_stop_aborts_when_snapshot_is_stale(self):
         result, calls = self.run_server("stop", VPS="1", SNAP_TIME=iso(-3600))

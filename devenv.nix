@@ -20,6 +20,10 @@
     sops
     age
 
+    # The vault: copied with rclone (bin/server stop), inspected with restic
+    rclone
+    restic
+
     # Checks (mirrors .github/workflows/validate.yml)
     shellcheck
     actionlint
@@ -48,7 +52,7 @@
       set -euo pipefail
       cd "$DEVENV_ROOT"
       for script in scripts/*.sh bin/server; do bash -n "$script"; done
-      shellcheck scripts/deploy.sh scripts/prune.sh scripts/publish-world.sh scripts/restore-regions.sh bin/server
+      shellcheck scripts/*.sh bin/server
       actionlint
       python3 -m unittest discover -s tests
       tofu -chdir=infra fmt -check
@@ -61,7 +65,7 @@
     shellcheck = {
       enable = true;
       # The older backup scripts in scripts/ aren't lint-clean yet.
-      files = "^(scripts/(deploy|prune|publish-world|restore-regions)\\.sh|bin/server)$";
+      files = "^(scripts/.*\\.sh|bin/server)$";
     };
     actionlint.enable = true;
     nixfmt.enable = true;

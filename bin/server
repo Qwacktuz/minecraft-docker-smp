@@ -6,6 +6,7 @@
 #   bin/server stop          shut down; on the VPS: final backup, delete the VPS
 #   bin/server status        where is the world running?
 #   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
+#   bin/server vault         copy the backups into the locked vault bucket now
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
 #
 # There is one world. It lives in R2 (Restic) between runs. Only the VPS writes
@@ -22,6 +23,7 @@ REPO=${REPO:-https://github.com/Qwacktuz/minecraft-docker-smp.git}
 AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
 WORLD=data/minecraft/world/level.dat     # present once a world has been restored
 WORLD_HOST=mc-backup-worker              # restic host of the VPS backups (compose.yml)
+VAULT_BUCKET=${VAULT_BUCKET:-cactuz-mc-vault}  # R2 bucket locks keep its files 30 days
 
 die() { echo "server: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
@@ -117,6 +119,33 @@ verified_backup() {
   (( ${latest% *} >= started )) || die "no new snapshot appeared in R2; the server is still running"
   SNAPSHOT_ID=${latest#* }
   say "Backup ${SNAPSHOT_ID:0:8} verified in R2."
+}
+
+# Copies the backup repository's files into the vault bucket. Runs on the
+# laptop under both secret files: it reads the backups with the VPS key and
+# writes with the vault key, which never leaves the laptop. Only adds files, so
+# R2 bucket locks can stop anything in the vault from being deleted for 30 days.
+# A copy of the vault is a complete restic repository (same password).
+# shellcheck disable=SC2154 # R2_* and VAULT_* come from sops exec-env
+vault_copy() {
+  need rclone
+  export RCLONE_CONFIG_BACKUPS_TYPE=s3 RCLONE_CONFIG_BACKUPS_PROVIDER=Cloudflare \
+    RCLONE_CONFIG_BACKUPS_ENDPOINT="$R2_ENDPOINT" \
+    RCLONE_CONFIG_BACKUPS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+    RCLONE_CONFIG_BACKUPS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+  export RCLONE_CONFIG_VAULT_TYPE=s3 RCLONE_CONFIG_VAULT_PROVIDER=Cloudflare \
+    RCLONE_CONFIG_VAULT_ENDPOINT="$R2_ENDPOINT" RCLONE_CONFIG_VAULT_NO_CHECK_BUCKET=true \
+    RCLONE_CONFIG_VAULT_ACCESS_KEY_ID="$VAULT_ACCESS_KEY_ID" \
+    RCLONE_CONFIG_VAULT_SECRET_ACCESS_KEY="$VAULT_SECRET_ACCESS_KEY"
+  # Restic files are content-addressed and never change, so existing ones are skipped.
+  rclone copy "backups:$R2_BUCKET_NAME" "vault:$VAULT_BUCKET" --ignore-existing \
+    --include "/config" --include "/keys/**" --include "/data/**" \
+    --include "/index/**" --include "/snapshots/**" --transfers 8 --stats-one-line --stats 30s
+}
+vault() {
+  say "Copying the backups into the vault bucket ($VAULT_BUCKET)..."
+  sops exec-env "$ROOT/secrets/app.enc.env" \
+    "$(printf '%q ' sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _vault-copy)")"
 }
 
 # --- Pruning -------------------------------------------------------------------
@@ -255,6 +284,12 @@ stop() {
     prune_vps
   fi
   verified_backup "Server shutting down for a final backup..."
+  # The VPS disk holds the only other copy of the world: never delete it when
+  # the backups look damaged.
+  say "Checking the backups' integrity (reading 2% of the data)..."
+  local check
+  check=$(on vps "docker compose exec -T backup restic --retry-lock 2m check --read-data-subset 2%" 2>&1) ||
+    { tail -n 20 <<< "$check" >&2; die "the backups failed their integrity check; the server is still running"; }
   say "Stopping containers..."
   on vps "docker compose down"
   # A public download of the world (no player data); never blocks the stop.
@@ -267,6 +302,7 @@ stop() {
   # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
   sops exec-env "$INFRA_SECRETS" "$(printf '%q ' "$0" _forget-device "$HOST")" ||
     echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
+  vault || echo "warning: could not copy the backups into the vault; run 'bin/server vault' later" >&2
   say "Stopped. The world is safe in R2."
 }
 
@@ -318,7 +354,7 @@ prune() {
   esac
 }
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 case "${1:-} ${2:-}" in
   "start local") start_local ;;
@@ -326,6 +362,8 @@ case "${1:-} ${2:-}" in
   "stop "*) stop ;;
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
+  "vault "*) vault ;;
+  "_vault-copy "*) vault_copy ;;
   "tofu "*) shift; tf_init; tf "$@" ;;
   "_forget-device "*) forget_device "$2" ;;
   "-h "* | "--help "* | "help "*) usage ;;
