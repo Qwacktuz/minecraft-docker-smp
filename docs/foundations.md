@@ -5,6 +5,13 @@ separate runtime path; see [the review and workflow exercise](local-core-checkpo
 The remaining milestones are proposed. The running production stack is unchanged.
 It builds on the quick-win branch; it does not require rewriting project history.
 
+Update, 2026-11-19: the production path moved ahead of this proposal in a simpler
+form. `bin/server` (laptop-run) creates/destroys the VPS and moves the single world
+through R2; GitHub Actions only validates; devenv pins every developer and CI tool;
+all secrets are SOPS-encrypted in `secrets/` and CI holds none. Where this document
+mentions deployment workflows or CI decryption credentials, read it as superseded
+by [CHANGELOG.md](../CHANGELOG.md).
+
 ## Goals and operating model
 
 Target one production Java/Fabric world on Hetzner initially, reproducible local
@@ -278,7 +285,7 @@ disabled. Basic external checks are part of the core operational requirement.
 | UFW + Hetzner firewall | Keep with explicit ownership | Cloud rules and Docker-aware host policy; UFW alone is not a container publication boundary |
 | Fail2ban | Remove from minimal image unless justified | Little value on a Tailscale-only SSH path; reassess if public services need it |
 | SSH/RCON | Keep, restrict | Host control and game save/admin control; RCON stays private |
-| Nix/direnv | Optional developer tooling | Pin developer tools if useful; runtime/CI must not depend on an undocumented personal environment |
+| Nix/devenv | Keep (adopted) | `devenv.nix`/`devenv.lock` pin developer and CI tools; CI runs `devenv test` |
 | ShellCheck/Actionlint/unittest | Keep | Static checks and meaningful lifecycle failure tests |
 | OCI registry + release inventory | Add explicit ownership | Retained immutable release artifacts; GHCR is a natural fit with GitHub |
 | External availability/heartbeat monitor | Add | Detect host loss, stale backups, and failed rehearsals when the host is gone |

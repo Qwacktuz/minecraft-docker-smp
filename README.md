@@ -4,10 +4,13 @@ A Fabric Minecraft server deployed with Docker Compose, with Restic backups to
 Cloudflare R2 and optional access to management tools over Tailscale. Infrastructure
 provisioning currently targets Hetzner Cloud through OpenTofu.
 
-The replacement architecture is being implemented incrementally. Start with the
-[local-core code review and workflow exercise](docs/local-core-checkpoint.md).
-Its controller uses a separate Compose file; the commands below describe the
-existing production stack.
+Day to day, everything goes through one command, `bin/server start local|vps` /
+`stop` (see [Start and stop](#start-and-stop)); tools come from
+[devenv](#development-environment). Recent changes are in [CHANGELOG.md](CHANGELOG.md).
+
+A longer-term replacement architecture is being explored separately in the
+[local-core checkpoint](docs/local-core-checkpoint.md) (`bin/smp`, its own Compose
+file); the commands below describe the production stack.
 
 ## Components
 
@@ -17,7 +20,8 @@ existing production stack.
   files without granting Alloy Docker socket access. Minecraft metrics remain
   unavailable until a compatible Fabric exporter is enabled.
 - **Management:** Arcane, which has privileged Docker socket access.
-- **Secrets:** SOPS/Age-encrypted configuration; deployment creates a private `.env`.
+- **Secrets:** all SOPS/Age-encrypted in `secrets/`: `infra.enc.env` (OpenTofu) and
+  `app.enc.env` (Compose); deployment creates a private `.env`. See [infra/README.md](infra/README.md#secrets).
 - **Access:** Public game/voice/webcam ports; management ports bound to an explicit
   host address. Public SSH is blocked by the configured Hetzner firewall.
 

@@ -52,8 +52,8 @@ On the server, before the first deployment of this change:
    touch .loki-storage-migrated
    ```
 
-   Trigger the deployment workflow, or run `bash scripts/deploy.sh` with SOPS
-   credentials available. Verify Loki readiness and query historical logs in
+   Redeploy with `bin/server start vps` from your laptop (it redeploys without
+   restoring when the VPS already exists). A freshly created VPS never needs this migration. Verify Loki readiness and query historical logs in
    Grafana before deleting the host export. If deployment fails, inspect logs;
    retain the export and avoid pruning the old container/image.
 
