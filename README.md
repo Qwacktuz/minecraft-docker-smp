@@ -69,7 +69,7 @@ the Tailscale app, and your Age key in `SOPS_AGE_KEY_FILE` (default
   retention. Snapshots tagged `pre-prune` are kept for rollbacks.
 
 The world is in `data/minecraft` (gitignored). On the VPS, the app lives in `~/app`.
-Recovery from a specific snapshot is in [docs/how2backuprestore.md](docs/how2backuprestore.md).
+Recovery from a specific snapshot is in [docs/backup.md](docs/backup.md).
 
 Useful commands from the app directory:
 
@@ -95,7 +95,7 @@ On the VPS, `stop` does these in order, and stops at any failure with the VPS st
 The vault only ever gains files. R2 bucket locks keep them for 30 days, and the VPS
 has no key for it, so even a compromised server can't destroy the backups. Copy
 again any time with `server vault`. Restoring from the vault:
-[docs/how2backuprestore.md](docs/how2backuprestore.md#restore-from-the-vault).
+[docs/backup.md](docs/backup.md#restore-from-the-vault).
 
 ## Secrets
 

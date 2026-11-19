@@ -89,7 +89,7 @@ docker compose exec backup restic snapshots --tag pre-prune   # pick the ID
 ```
 
 - **Everything:** restore that snapshot with the steps in
-  [how2backuprestore.md](how2backuprestore.md). Anything built since then is lost.
+  [backup.md](backup.md). Anything built since then is lost.
 - **One area:** restore just that area's region files. A region file covers
   512×512 blocks: `r.<floor(x/512)>.<floor(z/512)>.mca`. The script stops the game,
   restores each file with its `entities/` and `poi/` partners, and starts the game again:

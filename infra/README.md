@@ -78,4 +78,4 @@ manual OpenTofu commands while `bin/server` is running.
 host. Bootstrap currently downloads an AMD64 SOPS binary. ARM support and ongoing
 OS configuration require additional work.
 
-See [backup and restore](../docs/how2backuprestore.md) before any replacement.
+See [backup and restore](../docs/backup.md) before any replacement.
