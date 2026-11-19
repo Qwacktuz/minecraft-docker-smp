@@ -5,7 +5,8 @@ umask 077
 APP_DIR="${APP_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$APP_DIR"
 SERVICE=minecraft-service
-WORLD_HOST=mc-backup-worker # restic host of the VPS backups (compose.yml)
+# shellcheck source=lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 ENV_FILE=$(mktemp "$APP_DIR/.env.XXXXXX")
 trap 'rm -f -- "$ENV_FILE"' EXIT
 
@@ -55,29 +56,18 @@ if [[ "${RESTORE:-}" == latest ]]; then
   "${compose[@]}" stop
   # Read-only restic: --no-lock writes nothing to R2, and --host limits it to
   # the VPS snapshots.
-  restic() {
-    # shellcheck disable=SC1091
-    (set -a; . ./.env; set +a
-     RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${R2_BUCKET_NAME}"
-     AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-     export RESTIC_REPOSITORY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-     # -e NAME (without a value) keeps secrets out of the process arguments.
-     docker run --rm --entrypoint restic -v "$APP_DIR/data/minecraft:/data" \
-       -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-       itzg/mc-backup --no-lock -o s3.region=auto "$@")
-  }
   if [[ "${NEW_WORLD:-}" == 1 ]]; then
     echo "NEW_WORLD=1: starting without restoring a snapshot."
-  elif ! restic snapshots --host "$WORLD_HOST" --json --latest 1 | grep -q '"id"'; then
+  elif ! restic --no-lock snapshots --host "$WORLD_HOST" --json --latest 1 | grep -q '"id"'; then
     echo "ERROR: No R2 snapshot found. Use NEW_WORLD=1 to create a fresh world." >&2
     exit 1
   else
     echo "Restoring the latest R2 snapshot (old data kept in data/minecraft.previous)..."
     mkdir -p data
-    docker run --rm -v "$APP_DIR/data:/d" alpine sh -c \
+    docker run --rm -v "$APP_DIR/data:/d" "$ALPINE_IMAGE" sh -c \
       'rm -rf /d/minecraft.previous; if [ -d /d/minecraft ]; then mv /d/minecraft /d/minecraft.previous; fi; mkdir -p /d/minecraft'
-    restic restore latest --host "$WORLD_HOST" --target /
-    docker run --rm -v "$APP_DIR/data/minecraft:/data" alpine chown -R 1000:1000 /data
+    restic --no-lock restore latest --host "$WORLD_HOST" --target /
+    fix_owner
   fi
 fi
 

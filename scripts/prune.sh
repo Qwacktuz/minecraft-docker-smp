@@ -11,10 +11,11 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$APP_DIR"
+# shellcheck source=lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 
 MCASELECTOR_VERSION=2.9 # supports Minecraft 26.3
 MCASELECTOR_SHA256=8e35eaa6a5119ce711b53530c22aaac531332e8fdffda2357d16eb6f52327267
-JAVA_IMAGE=eclipse-temurin:25-jre
 WORLD=data/minecraft/world
 OUT=.cache/prune
 JAR=.cache/mcaselector-$MCASELECTOR_VERSION.jar

@@ -7,7 +7,8 @@ x-logging: &bounded-logging
 services:
   # Main SMP server
   minecraft-service:
-    image: itzg/minecraft-server:stable
+    # Pinned (tag + multi-arch digest); bump deliberately.
+    image: itzg/minecraft-server:2026.11.0-java25@sha256:8d5080d8dcd0a2629c2e4f248678373a337a40537ad6ef2857c7dbcda6e3eadd
     container_name: fabric-server
     stop_grace_period: 2m
     restart: unless-stopped
@@ -127,7 +128,7 @@ services:
   # Only the VPS runs backups: deploy.sh enables this profile with BACKUPS=1.
   # A local copy of the world is read-only and never writes to R2.
   backup:
-    image: itzg/mc-backup
+    image: itzg/mc-backup:2026.11.1@sha256:d731fa58822525cc65a23fbd82f472be4fc74854ee313da36bb4872bdba722c7 # = BACKUP_IMAGE in scripts/lib.sh
     container_name: mc-backup
     profiles: [backup]
     restart: unless-stopped

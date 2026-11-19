@@ -7,7 +7,8 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$APP_DIR"
-RCLONE_IMAGE=rclone/rclone:1.75.2
+# shellcheck source=lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 WORLD=data/minecraft/world
 ZIP=.cache/world.zip
 

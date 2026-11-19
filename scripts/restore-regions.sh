@@ -11,6 +11,8 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-$HOME/app}"
 cd "$APP_DIR"
+# shellcheck source=lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 (( $# >= 2 )) || { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 snapshot=$1; shift
 
@@ -24,15 +26,7 @@ for path in "$@"; do
 done
 
 docker compose stop minecraft-service
-# -e NAME (without a value) keeps the secrets out of the process arguments.
-# shellcheck disable=SC1091
-(set -a; . ./.env; set +a
- RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${R2_BUCKET_NAME}"
- AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
- export RESTIC_REPOSITORY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
- docker run --rm --entrypoint restic -v "$APP_DIR/data/minecraft:/data" \
-   -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-   itzg/mc-backup --no-lock -o s3.region=auto restore "$snapshot" --target / "${includes[@]}")
-docker run --rm -v "$APP_DIR/data/minecraft:/data" alpine chown -R 1000:1000 /data
+restic --no-lock restore "$snapshot" --target / "${includes[@]}"
+fix_owner
 docker compose up -d --wait --wait-timeout 600 minecraft-service
 echo "Restored $# region file(s) from ${snapshot:0:8}."

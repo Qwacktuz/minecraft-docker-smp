@@ -1,4 +1,5 @@
 import json
+import re
 import os
 from pathlib import Path
 import shutil
@@ -60,8 +61,24 @@ class ComposeTests(unittest.TestCase):
         backup = json.loads(result.stdout)["services"]["backup"]["environment"]
         self.assertIn("--keep-tag pre-prune", backup["PRUNE_RESTIC_RETENTION"])
         host = backup["RESTIC_HOST"]
-        for script in ("scripts/deploy.sh", "bin/server"):
+        for script in ("scripts/lib.sh", "bin/server"):
             self.assertIn(f"WORLD_HOST={host}", (ROOT / script).read_text())
+
+    def test_every_image_is_pinned_by_digest(self):
+        services = json.loads(self.render().stdout)["services"]
+        for name, service in services.items():
+            self.assertRegex(service["image"], r":[^@]+@sha256:[0-9a-f]{64}$", name)
+        lib = (ROOT / "scripts/lib.sh").read_text()
+        images = dict(re.findall(r"^([A-Z]+_IMAGE)=(\S+)$", lib, re.M))
+        self.assertEqual(set(images), {"BACKUP_IMAGE", "ALPINE_IMAGE", "JAVA_IMAGE", "RCLONE_IMAGE"})
+        for image in images.values():
+            self.assertRegex(image, r":[^@]+@sha256:[0-9a-f]{64}$")
+        self.assertEqual(services["backup"]["image"], images["BACKUP_IMAGE"])
+        # Scripts use the pinned variables, never a bare image name.
+        for script in (ROOT / "scripts").glob("*.sh"):
+            if script.name != "lib.sh":
+                self.assertNotRegex(script.read_text(), r"(itzg/|alpine[ :]|eclipse-temurin|rclone/rclone)",
+                                    script.name)
 
 
 if __name__ == "__main__":
