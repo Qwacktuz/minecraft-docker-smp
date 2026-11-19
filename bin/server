@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# One entry point for the Minecraft world, run from the laptop.
+#
+#   bin/server start local   run the world in Docker on this machine
+#   bin/server start vps     create the Hetzner VPS and run the world there
+#   bin/server stop          final backup to R2, shut down, delete the VPS
+#   bin/server status        where is the world running?
+#
+# There is one world. It lives in R2 (Restic) between runs: `stop` only shuts
+# down after a fresh backup is verified, and `start` restores the newest one.
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$ROOT"
+
+HOST=${TS_HOST:-mc-prod}                 # Tailscale name; infra var.server_name
+SSH_USER=${SSH_USER:-deployer}           # infra var.username
+REPO=${REPO:-https://github.com/Qwacktuz/minecraft-docker-smp.git}
+AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
+
+die() { echo "server: $*" >&2; exit 1; }
+say() { echo "==> $*"; }
+need() { for tool; do command -v "$tool" >/dev/null || die "'$tool' is not installed or not on PATH"; done; }
+
+# --- OpenTofu (VPS lifecycle) ------------------------------------------------
+
+# Provider/backend credentials come from infra/.env (also loaded by direnv).
+# shellcheck disable=SC1091
+if [[ -f infra/.env ]]; then set -a; . infra/.env; set +a; fi
+
+tf() { tofu -chdir="$ROOT/infra" "$@"; }
+TF_READY=
+tf_init() {
+  [[ -n "$TF_READY" ]] && return
+  tf init -input=false -backend-config=backend.conf >/dev/null || die "tofu init failed"
+  TF_READY=1
+}
+vps_exists() {
+  local resources
+  tf_init
+  # A failed state read must stop us, never look like "no VPS".
+  resources=$(tf state list) || die "could not read the OpenTofu state"
+  grep -qx hcloud_server.minecraft <<< "$resources"
+}
+
+# --- Where commands run --------------------------------------------------------
+
+# Tailscale authenticates the host, and every VPS is new, so don't pin host keys.
+remote() {
+  ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR \
+      -o ConnectTimeout=10 "$SSH_USER@$HOST" "$@"
+}
+local_running() {
+  command -v docker >/dev/null &&
+    docker compose ps --status running --services 2>/dev/null | grep -qx minecraft-service
+}
+# `on local|vps <shell command>` runs a command inside the app directory.
+on() {
+  local where=$1; shift
+  if [[ "$where" == local ]]; then bash -c "$*"; else remote "cd ~/app && $*"; fi
+}
+where_running() {
+  if local_running; then echo local
+  elif vps_exists; then echo vps
+  else echo none
+  fi
+}
+
+# --- Backups -------------------------------------------------------------------
+
+# Prints the epoch time of the newest snapshot (reads restic JSON on stdin).
+snapshot_epoch() {
+  python3 -c '
+import json, re, sys
+from datetime import datetime
+times = [s["time"] for s in json.load(sys.stdin)]
+if not times: sys.exit(1)
+def epoch(t):
+    t = re.sub(r"\.\d+", "", t).replace("Z", "+00:00")  # drop nanoseconds
+    return int(datetime.fromisoformat(t).timestamp())
+print(max(epoch(t) for t in times))'
+}
+
+final_backup() {
+  local where=$1 started latest
+  say "Taking a final backup on $where..."
+  started=$(on "$where" date -u +%s)
+  on "$where" "docker compose exec -T minecraft-service rcon-cli 'say Server shutting down for a final backup...'" || true
+  on "$where" "docker compose exec -T backup backup now" || die "backup failed; the server is still running"
+  latest=$(on "$where" "docker compose exec -T backup restic snapshots --latest 1 --json" | snapshot_epoch) ||
+    die "could not read the latest snapshot; the server is still running"
+  (( latest >= started )) || die "no new snapshot appeared in R2; the server is still running"
+  say "Backup verified in R2."
+}
+
+# --- Commands ------------------------------------------------------------------
+
+start_local() {
+  need docker sops tofu
+  [[ -f "$AGE_KEY_FILE" ]] || die "Age key not found at $AGE_KEY_FILE"
+  local restore=latest
+  if local_running; then
+    say "Already running locally; redeploying without restoring."
+    restore=
+  elif vps_exists; then
+    die "the world is running on the VPS; run 'bin/server stop' first"
+  fi
+  SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" APP_DIR="$ROOT" TS_IP=127.0.0.1 RESTORE="$restore" \
+    bash scripts/deploy.sh
+  say "Running locally: connect to localhost:25565 (Grafana: http://127.0.0.1:3000)"
+}
+
+start_vps() {
+  need tofu git ssh
+  [[ -f "$AGE_KEY_FILE" ]] || die "Age key not found at $AGE_KEY_FILE"
+  local_running && die "the world is running locally; run 'bin/server stop' first"
+
+  # The VPS deploys a commit from GitHub, so it must be pushed.
+  local sha remote_name
+  sha=$(git rev-parse HEAD)
+  remote_name=$(git remote | head -n1)
+  git fetch --quiet "$remote_name"
+  [[ -n "$(git branch -r --contains "$sha")" ]] ||
+    die "commit ${sha:0:7} is not pushed to '$remote_name'; push it first"
+  [[ -z "$(git status --porcelain --untracked-files=no)" ]] ||
+    echo "warning: uncommitted changes are not deployed; the VPS runs ${sha:0:7}" >&2
+
+  local restore=latest
+  vps_exists && restore= && say "VPS already exists; redeploying without restoring."
+
+  say "Creating or updating the VPS..."
+  tf apply -input=false -auto-approve
+
+  say "Waiting for $HOST to join the tailnet..."
+  local tries=0
+  until remote true 2>/dev/null; do
+    (( ++tries <= 60 )) || die "$HOST did not become reachable over Tailscale SSH"
+    sleep 10
+  done
+
+  say "Deploying ${sha:0:7}..."
+  # The Age key travels over SSH stdin: never in arguments, env files, or disk.
+  # shellcheck disable=SC2016 # expanded on the VPS
+  local script='set -eu
+SOPS_AGE_KEY=$(cat); export SOPS_AGE_KEY
+sudo cloud-init status --wait >/dev/null
+mkdir -p ~/app && cd ~/app
+exec 9>~/.minecraft-deploy.lock; flock -w 1800 9
+[ -d .git ] || git clone -q "$REPO" .
+git fetch -q origin "$SHA" && git reset -q --hard "$SHA"
+APP_DIR="$HOME/app" RESTORE="$RESTORE" bash scripts/deploy.sh'
+  remote "$(printf 'REPO=%q SHA=%q RESTORE=%q bash -c %q' "$REPO" "$sha" "$restore" "$script")" \
+    < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
+
+  say "Running on the VPS: mc.cactuz.dev ($(tf output -raw ipv4_address))"
+  say "Management over Tailscale: http://$HOST:3000 (Grafana), http://$HOST:3552 (Arcane)"
+}
+
+stop() {
+  need tofu
+  local where
+  where=$(where_running)
+  if [[ "$where" == none ]]; then say "Nothing is running."; return; fi
+
+  if [[ "$where" == vps ]] && ! remote true 2>/dev/null; then
+    die "a VPS exists but is unreachable; check it before destroying (tofu -chdir=infra destroy)"
+  fi
+  final_backup "$where"
+  say "Stopping containers..."
+  on "$where" "docker compose down"
+
+  if [[ "$where" == vps ]]; then
+    say "Deleting the VPS..."
+    remote "sudo tailscale logout" 2>/dev/null || true   # frees the 'mc-prod' name
+    tf destroy -input=false -auto-approve
+  fi
+  say "Stopped. The world is safe in R2."
+}
+
+status() {
+  need tofu
+  local where
+  where=$(where_running)
+  case "$where" in
+    none) say "Stopped (the world is in R2)."; return ;;
+    local) say "Running locally." ;;
+    vps) say "Running on the VPS ($HOST)." ;;
+  esac
+  local latest
+  if latest=$(on "$where" "docker compose exec -T backup restic snapshots --latest 1 --json" | snapshot_epoch); then
+    say "Latest backup: $(date -r "$latest" 2>/dev/null || date -d "@$latest")"
+  else
+    say "Latest backup: unknown"
+  fi
+}
+
+usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+case "${1:-} ${2:-}" in
+  "start local") start_local ;;
+  "start vps") start_vps ;;
+  "stop "*) stop ;;
+  "status "*) status ;;
+  "-h "* | "--help "* | "help "*) usage ;;
+  *) usage 1 >&2 ;;
+esac

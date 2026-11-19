@@ -22,6 +22,8 @@ with open(os.environ["MOCK_LOG"], "a") as log:
 if name == "sops":
     if stage != "empty":
         print("DUMMY=fixture")
+        print("R2_ENDPOINT=https://r2.invalid\nR2_BUCKET_NAME=b\nRESTIC_PASSWORD=p")
+        print("R2_ACCESS_KEY_ID=k\nR2_SECRET_ACCESS_KEY=s")
     sys.exit(1 if stage == "decrypt" else 0)
 if name == "tailscale":
     print(os.environ.get("MOCK_TS_IP", "100.100.1.2"))
@@ -32,6 +34,8 @@ if name == "docker":
         assert Path(".env").read_text() == "OLD=preserved\n"
     if stage in ("config", "pull", "up") and stage in args:
         sys.exit(1)
+    if "snapshots" in args:
+        print("[]" if stage == "no-snapshots" else '[{"id": "abc"}]')
     if "inspect" in args:
         print("" if stage == "legacy-loki" else "bind")
     if "ps" in args and "--quiet" in args:
@@ -43,7 +47,7 @@ if name == "docker":
 
 
 class DeployTests(unittest.TestCase):
-    def run_deploy(self, stage="", ip="100.100.1.2"):
+    def run_deploy(self, stage="", ip="100.100.1.2", **extra):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -57,7 +61,10 @@ class DeployTests(unittest.TestCase):
         log = root / "commands.jsonl"
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log), MOCK_TS_IP=ip,
-                   PATH=f"{binary}:{os.environ['PATH']}")
+                   PATH=f"{binary}:{os.environ['PATH']}", **extra)
+        for key in ("TS_IP", "RESTORE", "NEW_WORLD"):
+            if key not in extra:
+                env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
                                 capture_output=True, text=True)
         calls = [json.loads(line) for line in log.read_text().splitlines()]
@@ -93,6 +100,39 @@ class DeployTests(unittest.TestCase):
             if "exec" in call:
                 self.assertIn("minecraft-service", call)
             self.assertNotIn("prune", call)
+
+    def test_local_loopback_skips_tailscale(self):
+        root, result, calls = self.run_deploy(TS_IP="127.0.0.1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("TS_IP=127.0.0.1", (root / ".env").read_text())
+        self.assertFalse(any(call[0] == "tailscale" for call in calls))
+
+    def test_preset_non_loopback_ip_is_still_checked(self):
+        _, result, calls = self.run_deploy(TS_IP="8.8.8.8", ip="8.8.8.8")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(any(call[0] == "tailscale" for call in calls))
+
+    def test_restore_latest_happens_before_up(self):
+        _, result, calls = self.run_deploy(RESTORE="latest")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        index = lambda match: next(i for i, call in enumerate(calls) if match(call))
+        restore = index(lambda call: "restore" in call and "latest" in call)
+        move = index(lambda call: any("minecraft.previous" in arg for arg in call))
+        up = index(lambda call: "up" in call)
+        self.assertLess(move, restore)
+        self.assertLess(restore, up)
+        for call in calls:  # secrets are passed by name, never as values
+            self.assertNotIn("RESTIC_PASSWORD=p", call)
+            self.assertFalse(any(arg.endswith("=s") for arg in call))
+
+    def test_restore_without_snapshots_needs_new_world(self):
+        _, result, calls = self.run_deploy("no-snapshots", RESTORE="latest")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("NEW_WORLD=1", result.stderr)
+        self.assertFalse(any("up" in call or "restore" in call for call in calls))
+        _, result, calls = self.run_deploy("no-snapshots", RESTORE="latest", NEW_WORLD="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any("restore" in call for call in calls))
 
     def test_health_failure_is_not_reported_as_success(self):
         _, result, calls = self.run_deploy("up")

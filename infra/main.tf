@@ -14,7 +14,7 @@ resource "hcloud_ssh_key" "deploy_key" {
 # Generate a one-time ephemeral Tailscale Auth key using OAuth credentials
 resource "tailscale_tailnet_key" "server_key" {
   reusable      = false
-  ephemeral     = false
+  ephemeral     = true # device disappears once a deleted VPS goes offline
   preauthorized = true
   expiry        = 3600           # 1 hour for bootstrap
   tags          = ["tag:server"] # scuffed ACL fix later

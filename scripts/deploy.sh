@@ -15,12 +15,15 @@ if [[ ! -s "$ENV_FILE" ]]; then
   exit 1
 fi
 
-TS_IP=$(tailscale ip -4)
-if [[ ! "$TS_IP" =~ ^100\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] ||
-  (( 10#${BASH_REMATCH[1]} < 64 || 10#${BASH_REMATCH[1]} > 127 ||
-     10#${BASH_REMATCH[2]} > 255 || 10#${BASH_REMATCH[3]} > 255 )); then
-  echo "ERROR: Tailscale did not return one valid tailnet IPv4 address." >&2
-  exit 1
+# Local runs pass TS_IP=127.0.0.1 so management ports stay on the laptop.
+if [[ "${TS_IP:-}" != 127.0.0.1 ]]; then
+  TS_IP=$(tailscale ip -4)
+  if [[ ! "$TS_IP" =~ ^100\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] ||
+    (( 10#${BASH_REMATCH[1]} < 64 || 10#${BASH_REMATCH[1]} > 127 ||
+       10#${BASH_REMATCH[2]} > 255 || 10#${BASH_REMATCH[3]} > 255 )); then
+    echo "ERROR: Tailscale did not return one valid tailnet IPv4 address." >&2
+    exit 1
+  fi
 fi
 export TS_IP
 printf '\nTS_IP=%s\n' "$TS_IP" >> "$ENV_FILE"
@@ -51,6 +54,37 @@ fi
 # Keep the previous environment intact until validation and image pulls succeed.
 mv -f -- "$ENV_FILE" .env
 compose=(docker compose)
+
+# RESTORE=latest replaces the local world with the newest R2 snapshot. It runs
+# before `up`, so the backup container can never upload an empty world first.
+if [[ "${RESTORE:-}" == latest ]]; then
+  "${compose[@]}" stop minecraft-service backup
+  restic() {
+    # shellcheck disable=SC1091
+    (set -a; . ./.env; set +a
+     RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${R2_BUCKET_NAME}"
+     AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+     export RESTIC_REPOSITORY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+     # -e NAME (without a value) keeps secrets out of the process arguments.
+     docker run --rm --entrypoint restic -v "$APP_DIR/data/minecraft:/data" \
+       -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+       itzg/mc-backup -o s3.region=auto "$@")
+  }
+  if [[ "${NEW_WORLD:-}" == 1 ]]; then
+    echo "NEW_WORLD=1: starting without restoring a snapshot."
+  elif ! restic snapshots --json --latest 1 | grep -q '"id"'; then
+    echo "ERROR: No R2 snapshot found. Use NEW_WORLD=1 to create a fresh world." >&2
+    exit 1
+  else
+    echo "Restoring the latest R2 snapshot (old data kept in data/minecraft.previous)..."
+    mkdir -p data
+    docker run --rm -v "$APP_DIR/data:/d" alpine sh -c \
+      'rm -rf /d/minecraft.previous; if [ -d /d/minecraft ]; then mv /d/minecraft /d/minecraft.previous; fi; mkdir -p /d/minecraft'
+    restic restore latest --target /
+    docker run --rm -v "$APP_DIR/data/minecraft:/data" alpine chown -R 1000:1000 /data
+  fi
+fi
+
 echo "Updating containers and waiting for health checks..."
 if ! "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 600; then
   "${compose[@]}" ps >&2 || true
