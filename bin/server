@@ -107,20 +107,7 @@ where_running() {
 
 # Reads restic snapshot JSON on stdin and prints "<epoch> <id>" per snapshot,
 # newest first. Fails when there are none.
-snapshot_list() {
-  python3 -c '
-import json, re, sys
-from datetime import datetime
-def epoch(t):
-    t = re.sub(r"\.\d+", "", t).replace("Z", "+00:00")  # drop nanoseconds
-    return int(datetime.fromisoformat(t).timestamp())
-try:
-    snaps = sorted(((epoch(s["time"]), s["id"]) for s in json.load(sys.stdin)), reverse=True)
-except ValueError:  # restic printed an error instead of JSON
-    sys.exit(1)
-if not snaps: sys.exit(1)
-for time, id in snaps: print(time, id)'
-}
+snapshot_list() { python3 "$ROOT/scripts/snapshots.py"; }
 # `restic` runs inside the VPS backup container, limited to the VPS snapshots.
 # It waits for locks, e.g. while the container checks the repository at startup.
 vps_restic() { on vps "docker compose exec -T backup restic --retry-lock 2m $* --host $WORLD_HOST"; }

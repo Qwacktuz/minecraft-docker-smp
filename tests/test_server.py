@@ -106,7 +106,8 @@ class ServerTests(unittest.TestCase):
         (root / "prune/settings.env").write_text(
             f"AUTO_PRUNE_DAYS={flags.pop('AUTO_PRUNE_DAYS', '0')}\nPRUNE_KEEP_SNAPSHOTS=2\n")
         shutil.copy(SERVER, root / "bin/server")
-        shutil.copy(SERVER.parents[1] / "scripts/lib.sh", root / "scripts/lib.sh")
+        for script in ("lib.sh", "snapshots.py"):
+            shutil.copy(SERVER.parents[1] / "scripts" / script, root / "scripts" / script)
         # Stand-in deploy script: records the settings bin/server hands it.
         (root / "scripts/deploy.sh").write_text(
             'echo "{\\"argv\\": [\\"deploy.sh\\", \\"RESTORE=$RESTORE\\"], '

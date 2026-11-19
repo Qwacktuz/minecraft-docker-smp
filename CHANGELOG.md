@@ -11,6 +11,9 @@ No behaviour changes.
   `_pause-alerts`).
 - **Shared constants once.** `bin/server` sources `scripts/lib.sh`, so
   `WORLD_HOST` (and the pinned images) are defined in one place.
+- **Snapshot parsing in Python.** The inline `python3 -c` that orders restic
+  snapshots moved to `scripts/snapshots.py`, with unit tests
+  (`tests/test_snapshots.py`).
 
 ## Unreleased: backup alerts and Renovate (2026-11-19)
 
