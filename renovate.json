@@ -45,6 +45,16 @@
   ],
   "packageRules": [
     {
+      "description": "Small updates merge into dev by themselves once CI passes; minor and major updates wait for a review. Nothing goes live before dev is pushed to main.",
+      "matchUpdateTypes": [
+        "digest",
+        "patch",
+        "pin",
+        "pinDigest"
+      ],
+      "automerge": true
+    },
+    {
       "description": "OpenTofu providers: update infra/.terraform.lock.hcl within the version ranges in providers.tf; CI checks the lock with tofu init -lockfile=readonly",
       "matchManagers": [
         "terraform"
@@ -76,5 +86,6 @@
   ],
   "ignoreDeps": [
     "ubuntu"
-  ]
+  ],
+  "platformAutomerge": false
 }

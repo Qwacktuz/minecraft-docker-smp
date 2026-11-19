@@ -13,6 +13,13 @@
   in the `prod` environment, which only `main` may use, and `main` accepts
   updates from admins only. Tailscale access uses GitHub OIDC, so no Tailscale
   secret is stored.
+- **GitHub settings:**
+  - Renovate automerges digest and patch updates into `dev` after CI passes.
+  - Merged pull-request branches are deleted.
+  - Secret scanning with push protection and Dependabot alerts are on.
+  - Actions' token is read-only by default.
+  - Fork pull requests need approval.
+  - `dev` can't be deleted or force-pushed.
 
 ## Unreleased: script cleanups (2026-11-19)
 

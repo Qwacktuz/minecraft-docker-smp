@@ -136,8 +136,10 @@ Without them, nothing is sent.
 [Renovate](https://github.com/apps/renovate) (`renovate.json`) checks them every
 Monday morning:
 1. It opens a pull request against `dev` for each update. CI tests it.
-2. You merge it.
-3. It goes live at the next `server start vps`.
+2. Digest and patch updates merge themselves once CI passes. Renovate merges
+   them itself (`platformAutomerge: false`), because `dev` has no required
+   checks. You merge minor and major updates.
+3. They go live once `dev` is pushed to `main` and the server next starts.
 
 The Dependency Dashboard issue lists everything pending. Not covered:
 - `devenv.lock`: run `devenv update`.
