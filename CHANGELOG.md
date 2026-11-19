@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased: read-only local copies and chunk pruning (2026-11-19)
+
+- Only the VPS writes to R2. The backup service is in the Compose profile
+  `backup`, which `deploy.sh` enables only with `BACKUPS=1` (set by `start vps`).
+  A local `stop` takes no backup. Restores read R2 with `--no-lock` and only
+  consider snapshots from the restic host `mc-backup-worker` (now set explicitly
+  with `RESTIC_HOST`).
+- New `server prune [--dry-run]`. It backs up, tags the snapshot `pre-prune`,
+  stops the game, deletes unused chunks with MCA Selector 2.9 (headless,
+  checksummed) and restarts the game. The keep rules are time spent, recent
+  saves, player and respawn positions, `prune/protect.txt` and a buffer ring.
+  There is a refusal guard, and every dimension is planned before any is changed.
+- Optional automatic pruning on `stop` every `AUTO_PRUNE_DAYS` days (off by default).
+- `scripts/restore-regions.sh` restores single region files, to undo a prune in
+  one area. Retention keeps `pre-prune` snapshots; the newest 3 keep the tag.
+- The End's main island (from the original seed) and the void around it are
+  protected: pruned chunks would regenerate from the current seed.
+- Only chunks MCA Selector read and matched as failing every rule are deleted;
+  unreadable chunks are kept.
+- Verified on a local copy of the real world: start local restored with no
+  backup container; a dry run; a real prune (region files went from 3.1 GB to
+  0.45 GB); a healthy restart; stop. R2 was unchanged afterwards (same latest
+  snapshot, no locks).
+
 ## Unreleased: fresh-host fixes, ARM64 and verified round trips (2026-11-19)
 
 - Fresh VPS: cloud-init installs Docker before Tailscale. Tailscale SSH sessions

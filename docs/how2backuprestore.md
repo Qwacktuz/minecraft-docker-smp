@@ -53,3 +53,8 @@ after rollback and verify health before reopening the server.
 `bin/server stop` takes and verifies a final backup; `bin/server start local|vps`
 restores the newest snapshot before the server starts. That is the normal way to
 move the world; use the manual steps above only to recover an *older* snapshot.
+
+Only the VPS runs the backup service, so the `docker compose exec backup ...`
+commands above work there only. A local copy (`start local`) is read-only and never
+creates snapshots. To undo a chunk prune, use the `pre-prune` snapshots; see
+[pruning.md](pruning.md#undoing-a-prune).
