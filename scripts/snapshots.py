@@ -3,6 +3,11 @@
 
 Prints "<epoch> <id>" per snapshot. Exits 1 when there are none, or when restic
 printed an error instead of JSON.
+
+    restic snapshots --json | snapshots.py --find <id-prefix|latest>
+
+Prints the full ID of the one snapshot whose ID starts with the prefix (or the
+newest one). Exits 1 when none or several match.
 """
 
 import json
@@ -21,10 +26,30 @@ def newest_first(snapshots):
     return sorted(((epoch(s["time"]), s["id"]) for s in snapshots), reverse=True)
 
 
-def main(stdin=sys.stdin, stdout=sys.stdout):
+def find(snapshots, wanted):
+    """The full ID for an ID prefix or "latest", or None unless exactly one matches."""
+    if wanted == "latest":
+        return newest_first(snapshots)[0][1] if snapshots else None
+    if not re.fullmatch(r"[0-9a-f]{1,64}", wanted):
+        return None
+    matches = {s["id"] for s in snapshots if s["id"].startswith(wanted)}
+    return matches.pop() if len(matches) == 1 else None
+
+
+def main(stdin=sys.stdin, stdout=sys.stdout, argv=()):
     try:
-        snapshots = newest_first(json.load(stdin))
-    except ValueError:  # restic printed an error instead of JSON
+        data = json.load(stdin)
+        if len(argv) == 2 and argv[0] == "--find":
+            found = find(data, argv[1])
+            if found is None:
+                return 1
+            print(found, file=stdout)
+            return 0
+        if argv:
+            print(__doc__.strip(), file=sys.stderr)
+            return 2
+        snapshots = newest_first(data)
+    except (ValueError, TypeError, KeyError, AttributeError):  # restic printed an error instead of JSON
         return 1
     if not snapshots:
         return 1
@@ -34,4 +59,4 @@ def main(stdin=sys.stdin, stdout=sys.stdout):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(argv=sys.argv[1:]))

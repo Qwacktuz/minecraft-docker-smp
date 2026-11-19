@@ -23,6 +23,11 @@ cd "$APP_DIR"
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+# The full ID of a WORLD_HOST snapshot; stops for any other snapshot.
+resolve() {
+  world_snapshot "$1" ||
+    { echo "No single $WORLD_HOST snapshot matches '$1' (restores only use the VPS backups)." >&2; exit 1; }
+}
 restart() {
   fix_owner
   docker compose up -d --wait --wait-timeout 600 minecraft-service
@@ -36,6 +41,7 @@ world() {
     read -r -p "Snapshot ID to restore (or 'latest'): " snapshot
   fi
   [[ -n "$snapshot" ]] || { echo "No snapshot given." >&2; exit 1; }
+  snapshot=$(resolve "$snapshot")
   if [[ "${2:-}" != --yes && "${2:-}" != -y ]]; then
     read -r -p "Replace the current world with snapshot '$snapshot'? [y/N] " confirm
     [[ "$confirm" =~ ^[yY] ]] || { echo "Aborted."; exit 0; }
@@ -63,6 +69,7 @@ regions() {
       includes+=(--include "/data/${BASH_REMATCH[1]}$kind/${BASH_REMATCH[3]}")
     done
   done
+  snapshot=$(resolve "$snapshot")
 
   docker compose stop minecraft-service
   restic --no-lock restore "$snapshot" --target / "${includes[@]}"

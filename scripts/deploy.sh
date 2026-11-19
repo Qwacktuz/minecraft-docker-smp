@@ -50,23 +50,29 @@ if [[ "${BACKUPS:-}" != 1 ]]; then
   "${compose[@]}" --profile backup rm --stop --force backup >/dev/null 2>&1 || true
 fi
 
-# RESTORE=latest replaces the local world with the newest R2 snapshot. It runs
-# before `up`, so the backup container can never upload an empty world first.
-if [[ "${RESTORE:-}" == latest ]]; then
+# RESTORE=latest (or a snapshot ID) replaces the local world with that R2
+# snapshot. It runs before `up`, so the backup container can never upload an
+# empty world first. RESTIC_SOURCE=vault restores from the vault (lib.sh).
+if [[ -n "${RESTORE:-}" ]]; then
   "${compose[@]}" stop
-  # Read-only restic: --no-lock writes nothing to R2, and --host limits it to
-  # the VPS snapshots.
+  # Read-only restic: --no-lock writes nothing to R2, and --host (or
+  # world_snapshot for an explicit ID) limits it to the VPS snapshots.
   if [[ "${NEW_WORLD:-}" == 1 ]]; then
     echo "NEW_WORLD=1: starting without restoring a snapshot."
   elif ! restic --no-lock snapshots --host "$WORLD_HOST" --json --latest 1 | grep -q '"id"'; then
     echo "ERROR: No R2 snapshot found. Use NEW_WORLD=1 to create a fresh world." >&2
     exit 1
   else
-    echo "Restoring the latest R2 snapshot (old data kept in data/minecraft.previous)..."
+    snapshot=latest
+    if [[ "$RESTORE" != latest ]]; then
+      snapshot=$(world_snapshot "$RESTORE") ||
+        { echo "ERROR: No single $WORLD_HOST snapshot matches '$RESTORE'." >&2; exit 1; }
+    fi
+    echo "Restoring R2 snapshot $snapshot (old data kept in data/minecraft.previous)..."
     mkdir -p data
     docker run --rm -v "$APP_DIR/data:/d" "$ALPINE_IMAGE" sh -c \
       'rm -rf /d/minecraft.previous; if [ -d /d/minecraft ]; then mv /d/minecraft /d/minecraft.previous; fi; mkdir -p /d/minecraft'
-    restic --no-lock restore latest --host "$WORLD_HOST" --target /
+    restic --no-lock restore "$snapshot" --host "$WORLD_HOST" --target /
     fix_owner
   fi
 fi
@@ -74,7 +80,7 @@ fi
 # Never start without a world: Minecraft would generate a new one and the backup
 # container would upload it over the real one's "latest".
 if [[ ! -f data/minecraft/world/level.dat && "${NEW_WORLD:-}" != 1 ]]; then
-  echo "ERROR: No world in data/minecraft. Use RESTORE=latest, or NEW_WORLD=1 for a fresh world." >&2
+  echo "ERROR: No world in data/minecraft. Use RESTORE=latest|<snapshot-id>, or NEW_WORLD=1 for a fresh world." >&2
   exit 1
 fi
 

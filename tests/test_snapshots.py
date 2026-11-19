@@ -46,6 +46,33 @@ class SnapshotsTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(SCRIPT)], input="not json", capture_output=True, text=True)
         self.assertEqual((result.returncode, result.stdout, result.stderr), (1, "", ""))
 
+    def test_find_resolves_a_unique_prefix_or_latest(self):
+        snaps = [{"id": "abc111", "time": "2026-11-17T12:00:00Z"},
+                 {"id": "abc222", "time": "2026-11-19T12:00:00Z"},
+                 {"id": "def333", "time": "2026-11-18T12:00:00Z"}]
+        self.assertEqual(snapshots.find(snaps, "abc1"), "abc111")
+        self.assertEqual(snapshots.find(snaps, "def333"), "def333")
+        self.assertEqual(snapshots.find(snaps, "latest"), "abc222")
+        for wanted in ("abc", "", "0", "ABC111", "abc111x", "../x", "latest2"):
+            with self.subTest(wanted=wanted):
+                self.assertIsNone(snapshots.find(snaps, wanted))
+        self.assertIsNone(snapshots.find([], "latest"))
+
+    def test_find_command_line(self):
+        snaps = json.dumps([{"id": "abc111", "time": "2026-11-19T12:00:00Z"}])
+        for argv, expected in ((["--find", "ab"], (0, "abc111\n")), (["--find", "ff"], (1, "")),
+                               (["--find", "latest"], (0, "abc111\n"))):
+            with self.subTest(argv=argv):
+                result = subprocess.run([sys.executable, str(SCRIPT), *argv], input=snaps,
+                                        capture_output=True, text=True)
+                self.assertEqual((result.returncode, result.stdout), expected)
+        result = subprocess.run([sys.executable, str(SCRIPT), "--find", "ab"], input="Fatal: no repo",
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        result = subprocess.run([sys.executable, str(SCRIPT), "--bogus"], input=snaps,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
