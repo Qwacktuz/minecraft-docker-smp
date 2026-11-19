@@ -1,22 +1,29 @@
+x-logging: &bounded-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  # Main SMP server
   minecraft-service:
-    image: itzg/minecraft-server:java25-graalvm
+    image: itzg/minecraft-server:stable
     container_name: fabric-server
+    stop_grace_period: 2m
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     ports:
-      - "25565:25565"
-      - "25565:25565/udp"
-      - "24454:24454/udp"
-      - "${TS_IP}:25585:25585" # fabricexporter
+      - "25565:25565/tcp"
+      - "24454:24454/udp" # simplevoicechat mod
+      - "25454:25454/udp" # webcam mod
     environment:
       EULA: true
       TYPE: FABRIC
 
-      # VERSION_FROM_MODRINTH_PROJECTS: true # dynamically set VERSION if all modrinth projects support latest version
-      # MOTD: "%TYPE% server running §l§cMinecraft§r §n%VERSION%.\ Aka A §g§lminecraft§r §u-.-§r §5§mServer§r made by §a§kkaktus"
-      MOTD: "§l§c67§r server.\ Artem = §g§l67§r §u67§r §5§m67§r roblox skibidi §a§kkaktus"
+      VERSION: "26.3"
+      MOTD: "%TYPE% server running §l§cMinecraft§r §n%VERSION%.\ Aka A §g§lminecraft§r §u-.-§r §5§mServer§r made by §a§kkaktus"
       ICON: "/icon.png"
       OVERRIDE_ICON: true
       LEVEL: "world"
@@ -32,232 +39,115 @@ services:
       SIMULATION_DISTANCE: 10
 
       EXISTING_OPS_FILE: "SYNCHRONIZE"
-      OPS: "${MC_OPS}"
+      OPS: "${MC_OPS:-}"
       EXISTING_WHITELIST_FILE: "SYNCHRONIZE"
-      WHITELIST: "${MC_WHITELIST}"
+      WHITELIST: "${MC_WHITELIST:?Set MC_WHITELIST in .env}"
       ENFORCE_WHITELIST: true
       ENABLE_WHITELIST: true
 
-      RCON_PASSWORD: ${RCON_PASSWORD}
+      RCON_PASSWORD: ${RCON_PASSWORD:?Set RCON_PASSWORD in .env}
 
       USE_MEOWICE_FLAGS: true
-      USE_MEOWICE_GRAALVM_FLAGS: true
       MEMORY: 5G
-      JVM_OPTS: "-XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders" # not in meowice yet
 
-      REMOVE_OLD_MODS: false
-      VANILLATWEAKS_SHARECODE: SNoKz9
-      MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: BETA
+      REMOVE_OLD_MODS: true
+      VANILLATWEAKS_SHARECODE: fBtCTb
+      # VERSION_FROM_MODRINTH_PROJECTS: true
+      MODRINTH_ALLOWED_VERSION_TYPE: RELEASE
+      MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: RELEASE
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
       MODRINTH_PROJECTS: |
+        datapack:skull-portable
 
         fabric-api
         fabric-language-kotlin
-        fabricexporter
-        fabric-permissions-api
+        #fabricexporter # No 26.3 release candidate yet
+        #fabric-permissions-api
 
+        asynclogger
         spark
+        #krypton
         ferrite-core
-        krypton
         lithium
-        scalablelux
-        c2me-fabric
-        entityculling
-
-        packet-fixer
+        scalablelux:alpha
+        c2me-fabric:alpha
+        servercore 
         alternate-current
-        chunky
         clumps
-        noisiumforked
-        servercore
-        no-chat-reports
-        view-distance-fix
-        servux
-        tabtps
+        get-it-together-drops
+        lmd
+        zfastnoise
+        modernfix-mvus
 
-        luckperms
-        vanish
-        bluemap
+        bookshelf-inspector
+        syncmatica
+        servux
+        balm # soft dependency
         carpet
-        # worldedit
-        # axiom
-        simple-voice-chat
-        #plasmo-voice # TODO: migrate from svc
+        carpet-tis-addition
+        gca
+        no-chat-reports
+        #chunky
+        packet-fixer
+        luckperms
+        #bluemap
+        #axiom
+        vanish
+        simple-voice-chat:beta
+        webcam-mod
         appleskin
-        netherportalfix
-        balm # netherportalfix dep
+        armor-stands
 
       RCON_CMDS_STARTUP: |-
         gamerule players_sleeping_percentage 0
+        carpet setDefault optimizedTNT true
+        carpet setDefault optimizedTNTHighPriority true
+        carpet setDefault optimizedFastEntityMovement true
+        carpet setDefault commandPlayer true
+        carpet setDefault openFakePlayerInventory true
+
     volumes:
       - ./static/icon.png:/icon.png
       - ./data/minecraft:/data
+
     healthcheck:
       test: ["CMD", "mc-health"]
-      interval: 1m
-      timeout: 20s
-      retries: 15
-      start_period: 2m
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
     deploy:
       resources:
         limits:
-          memory: 6.5G
-    networks:
-      minecraft-network:
-        aliases:
-          - mc-server
+          memory: 6656M
 
   backup:
     image: itzg/mc-backup
     container_name: mc-backup
     hostname: mc-backup-worker
     restart: unless-stopped
+    logging: *bounded-logging
     security_opt:
       - no-new-privileges:true
     environment:
       INITIAL_DELAY: 1m
       BACKUP_INTERVAL: 1h
       RCON_HOST: minecraft-service
-      RCON_PASSWORD: "${RCON_PASSWORD}"
+      RCON_PASSWORD: "${RCON_PASSWORD:?Set RCON_PASSWORD in .env}"
+      PAUSE_IF_NO_PLAYERS: true
 
       # Compression & Size Savings (exclude bluemap)
       EXCLUDES: "bluemap,logs,cache,emotes,*.tmp,web,*.map"
 
       PRUNE_RESTIC_RETENTION: "--keep-within 24h --keep-daily 7 --keep-weekly 4 --keep-monthly 6"
       BACKUP_METHOD: "restic"
-      RESTIC_REPOSITORY: "s3:${R2_ENDPOINT}/${R2_BUCKET_NAME}"
-      RESTIC_PASSWORD: "${RESTIC_PASSWORD}"
-      AWS_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY}"
+      RESTIC_REPOSITORY: "s3:${R2_ENDPOINT:?Set R2_ENDPOINT in .env}/${R2_BUCKET_NAME:?Set R2_BUCKET_NAME in .env}"
+      RESTIC_PASSWORD: "${RESTIC_PASSWORD:?Set RESTIC_PASSWORD in .env}"
+      AWS_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in .env}"
+      AWS_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in .env}"
       RESTIC_OPTS: "-o s3.connections=10 -o s3.region=auto --compression auto"
     volumes:
       - ./data/minecraft:/data:ro
-      # - ./rclone:/config/rclone
     depends_on:
       minecraft-service:
         condition: service_healthy
-    networks:
-      minecraft-network:
-        aliases:
-          - mc-backup
-
-  grafana:
-    image: grafana/grafana-oss:latest
-    container_name: grafana
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    ports:
-      - "${TS_IP}:3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    networks:
-      minecraft-network:
-        aliases:
-          - grafana
-
-  # Collect metrics
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--web.enable-remote-write-receiver"
-    ports:
-      - "${TS_IP}:9090:9090"
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    networks:
-      minecraft-network:
-        aliases:
-          - prometheus
-
-  # Collect logs
-  loki:
-    image: grafana/loki:latest
-    container_name: loki
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    ports:
-      - "${TS_IP}:3100:3100"
-    # command: "-config.file=/etc/loki/local-config.yaml"
-    volumes:
-      # - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
-      - loki_data:/loki
-    networks:
-      minecraft-network:
-        aliases:
-          - loki
-
-  # Telemetry pipeline (forward data to loki/prometheus)
-  alloy:
-    image: grafana/alloy:latest
-    container_name: alloy
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    ports:
-      - "${TS_IP}:12345:12345"
-    command:
-      [
-        "run",
-        "--server.http.listen-addr=0.0.0.0:12345",
-        "--storage.path=/var/lib/alloy/data",
-        "/etc/alloy/config.alloy",
-      ]
-    volumes:
-      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      # Mount the rootless socket & logs
-      - /var/run/docker.sock:/var/run/docker.sock
-      - alloy_data:/var/lib/alloy/data
-
-      # Mount to interal host/ to not mess with container's own system metrics
-      - /:/host/rootfs:ro
-      - /sys:/host/sys:ro
-      - /proc:/host/proc:ro
-      - /run/udev/data:/host/run/udev/data:ro
-
-      # Mount minecraft logs
-      # - ./data/minecraft/logs:/var/log/minecraft:ro
-    networks:
-      minecraft-network:
-        aliases:
-          - alloy
-
-  portainer:
-    image: portainer/portainer-ce:latest
-    container_name: portainer
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    ports:
-      - "${TS_IP}:9000:9000"
-    volumes:
-      # Map the docker socket
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    networks:
-      minecraft-network:
-        aliases:
-          - portainer
-
-networks:
-  minecraft-network:
-    name: minecraft
-    # external: true
-
-volumes:
-  grafana_data:
-  prometheus_data:
-  loki_data:
-  alloy_data:
-  portainer_data:

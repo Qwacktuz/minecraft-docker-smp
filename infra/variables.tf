@@ -1,5 +1,4 @@
-# Deployment secrets
-# TODO: depricate enterly from tterraform 
+# Values come from secrets/infra.enc.env as TF_VAR_* (see bin/server).
 variable "hcloud_token" {
   description = "Hetzner Cloud API Token"
   type        = string
@@ -18,11 +17,36 @@ variable "ts_oauth_client_secret" {
   sensitive   = true
 }
 
-# Server variables
 variable "ts_tailnet" {
   description = "Tailscale tailnet name (e.g. 'user.github')"
   type        = string
   default     = "qwacktuz.github"
+}
+
+variable "cloudflare_zone_id" {
+  description = "cloudflare zone id"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "cloudflare_zone_name" {
+  description = "Cloudflare zone, e.g. mydomain.com"
+  type        = string
+  default     = "cactuz.dev"
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with DNS Edit + R2 permissions"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "minecraft_subdomain" {
+  description = "DNS record name for the Minecraft server, e.g. mc"
+  type        = string
+  default     = "mc"
 }
 
 variable "ssh_public_key" {

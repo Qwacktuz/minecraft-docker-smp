@@ -1,3 +1,5 @@
+#cloud-config
+
 users:
   - name: ${username}
     groups: sudo
@@ -6,24 +8,21 @@ users:
     ssh_authorized_keys:
       - ${ssh_pub_key}
 
+# Native Swap Configuration (2 GiB)
+swap:
+  filename: /swapfile
+  size: 2G
+  maxsize: 2147483648
+
 package_update: true
 package_upgrade: true
 packages:
   - curl
   - git
-  - tree
   - vim
-  - unzip
   - ufw
-  - fastfetch
-  - fail2ban
-  - age
 
 write_files:
-  - path: /etc/sysctl.d/99-tailscale.conf
-    content: |
-      net.ipv4.ip_forward = 1
-      net.ipv6.conf.all.forwarding = 1
   - path: /etc/ssh/sshd_config.d/minecraft-hardening.conf
     content: |
       PasswordAuthentication no
@@ -31,36 +30,38 @@ write_files:
       PubkeyAuthentication yes
 
 runcmd:
+  - set -e
   - [sh, -c, "echo 'Bootstrapping starting...' > /var/log/bootstrap.log"]
 
-  # Install tailscale
-  - sysctl -p /etc/sysctl.d/99-tailscale.conf
+  # Install & initialize Tailscale
   - curl -fsSL https://tailscale.com/install.sh | sh
-  - tailscale up --authkey=${ts_authkey} --ssh --advertise-exit-node --hostname=${hostname} --reset
+  - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
+  - systemctl restart tailscaled
+  - tailscale up --authkey=${ts_authkey} --ssh --hostname=${hostname} --reset
 
-  # Install docker
+  # Install Docker via official script
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
   - usermod -aG docker ${username}
 
-  # Install sops
-  - curl -LO https://github.com/getsops/sops/releases/download/v3.12.1/sops-v3.12.1.linux.amd64
-  - mv sops-v3.12.1.linux.amd64 /usr/local/bin/sops
+  # Install SOPS CLI
+  - curl -LO https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+  - mv sops-v3.13.3.linux.amd64 /usr/local/bin/sops
   - chmod +x /usr/local/bin/sops
 
-  # Ensure UFW is installed (Debian 13 might have minimal base)
-  - apt-get update
-  - apt-get install -y ufw
+  # Apply SSH Hardening Config
+  - systemctl reload sshd || systemctl reload ssh
 
-  # Firewall rules
+  # Configure UFW Rules
+  - systemctl enable ufw
   - /usr/sbin/ufw default deny incoming
   - /usr/sbin/ufw default allow outgoing
-  - /usr/sbin/ufw allow 22/tcp comment 'SSH Public (HCloud Firewall handles restriction)'
   - /usr/sbin/ufw allow 25565/tcp comment 'Minecraft'
-  - /usr/sbin/ufw allow 25565/udp comment 'Minecraft'
   - /usr/sbin/ufw allow 24454/udp comment 'SimpleVoiceChat'
-  - /usr/sbin/ufw allow in on tailscale0 comment 'Tailscale Internal'
-  - /usr/sbin/ufw allow 41641/udp comment 'Tailscale WG'
+  - /usr/sbin/ufw allow 25454/udp comment 'Webcam mod'
+  - /usr/sbin/ufw allow 41641/udp comment 'Tailscale Direct Communication'
+  - /usr/sbin/ufw allow in on tailscale0 comment 'Trust Tailnet Traffic'
+  - /usr/sbin/ufw deny 22/tcp comment 'Block Public SSH'
   - /usr/sbin/ufw --force enable
 
   - [sh, -c, "echo 'Bootstrapping finished.' >> /var/log/bootstrap.log"]

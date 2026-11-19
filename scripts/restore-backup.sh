@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_DIR="$HOME/app"
+APP_DIR="${APP_DIR:-$HOME/app}"
 SNAP_ID="${1:-}" # Optional: Pass snapshot ID as first argument
 
 cd "$APP_DIR" || exit 1
