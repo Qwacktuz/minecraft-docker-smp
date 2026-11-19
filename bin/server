@@ -16,13 +16,15 @@ set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
+# Shared with the host scripts: WORLD_HOST and the pinned images.
+# shellcheck source=scripts/lib.sh
+. "$ROOT/scripts/lib.sh"
 
 HOST=${TS_HOST:-mc-prod}                 # Tailscale name; infra var.server_name
 SSH_USER=${SSH_USER:-deployer}           # infra var.username
 REPO=${REPO:-https://github.com/Qwacktuz/minecraft-docker-smp.git}
 AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
 WORLD=data/minecraft/world/level.dat     # present once a world has been restored
-WORLD_HOST=mc-backup-worker              # restic host of the VPS backups (compose.yml)
 VAULT_BUCKET=${VAULT_BUCKET:-cactuz-mc-vault}  # R2 bucket locks keep its files 30 days
 
 die() { echo "server: $*" >&2; exit 1; }
@@ -143,7 +145,8 @@ verified_backup() {
 # writes with the vault key, which never leaves the laptop. Only adds files, so
 # R2 bucket locks can stop anything in the vault from being deleted for 30 days.
 # A copy of the vault is a complete restic repository (same password).
-# shellcheck disable=SC2154 # R2_* and VAULT_* come from sops exec-env
+# R2_* and VAULT_* come from `secrets all` (SC2031: lib.sh restic() reads ./.env in a subshell).
+# shellcheck disable=SC2154,SC2031
 vault_copy() {
   need rclone
   export RCLONE_CONFIG_BACKUPS_TYPE=s3 RCLONE_CONFIG_BACKUPS_PROVIDER=Cloudflare \

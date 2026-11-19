@@ -1,6 +1,6 @@
 # shellcheck shell=bash disable=SC2034 # the variables are used by the scripts that source this
-# Shared by the scripts that run on the app host; they source it after `cd`ing
-# into the app directory.
+# Shared by the scripts that run on the app host, and by bin/server on the
+# laptop. They source it after `cd`ing into the app directory (the repository).
 
 # Pinned images. Bump tag and digest together; the digest is the multi-arch
 # index from `docker buildx imagetools inspect <image:tag>`. compose.yml pins the

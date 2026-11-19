@@ -61,8 +61,11 @@ class ComposeTests(unittest.TestCase):
         backup = json.loads(result.stdout)["services"]["backup"]["environment"]
         self.assertIn("--keep-tag pre-prune", backup["PRUNE_RESTIC_RETENTION"])
         host = backup["RESTIC_HOST"]
-        for script in ("scripts/lib.sh", "bin/server"):
-            self.assertIn(f"WORLD_HOST={host}", (ROOT / script).read_text())
+        self.assertIn(f"WORLD_HOST={host}", (ROOT / "scripts/lib.sh").read_text())
+        # bin/server reads it from scripts/lib.sh rather than defining its own.
+        server = (ROOT / "bin/server").read_text()
+        self.assertIn('. "$ROOT/scripts/lib.sh"', server)
+        self.assertNotIn("WORLD_HOST=", server)
 
     def test_every_image_is_pinned_by_digest(self):
         services = json.loads(self.render().stdout)["services"]

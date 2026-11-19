@@ -9,6 +9,8 @@ No behaviour changes.
   `bin/server` under `sops exec-env`. It replaces the hand-quoted nested
   `sops exec-env` calls (tofu, tofu init, `_forget-device`, `_vault-copy`,
   `_pause-alerts`).
+- **Shared constants once.** `bin/server` sources `scripts/lib.sh`, so
+  `WORLD_HOST` (and the pinned images) are defined in one place.
 
 ## Unreleased: backup alerts and Renovate (2026-11-19)
 
