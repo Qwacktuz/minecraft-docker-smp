@@ -14,6 +14,9 @@ No behaviour changes.
 - **Snapshot parsing in Python.** The inline `python3 -c` that orders restic
   snapshots moved to `scripts/snapshots.py`, with unit tests
   (`tests/test_snapshots.py`).
+- **One restore script.** `scripts/restore-backup.sh`, `restore-regions.sh` and
+  `rollback-backup.sh` are now `scripts/restore.sh world|regions|rollback`, with
+  mocked tests (`tests/test_restore.py`).
 
 ## Unreleased: backup alerts and Renovate (2026-11-19)
 

@@ -160,8 +160,8 @@ tests use mocks and dummy credentials.
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
-- `scripts/restore-backup.sh`, `restore-regions.sh`, `rollback-backup.sh`,
-  `test-backup.sh`: manual backup tools, run on the app host. They share
+- `scripts/restore.sh` (`world`, `regions`, `rollback`) and
+  `scripts/test-backup.sh`: manual backup tools, run on the app host. They share
   `scripts/lib.sh` (pinned images, and restic with secrets passed by name).
 - `compose.yml`, `static/icon.png`: the game and its backups.
 - `infra/`: Hetzner VPS, firewall, DNS, Tailscale bootstrap, cloud-init.

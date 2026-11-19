@@ -1,7 +1,7 @@
 # Backup and recovery
 
 Run commands from the app directory (`~/app` on the VPS; set `APP_DIR` to use
-`restore-backup.sh` elsewhere). The scripts read `.env` as shell syntax. They are not yet a fully automated disaster-recovery
+`scripts/restore.sh` elsewhere). The scripts read `.env` as shell syntax. They are not yet a fully automated disaster-recovery
 system. Do not run restoration concurrently with deployment or other maintenance.
 
 ## Select a recovery point
@@ -33,7 +33,7 @@ SNAPSHOT_ID=replace-with-recorded-id
   exec 9>"$HOME/.minecraft-deploy.lock"
   flock -n 9
   docker compose stop backup
-  bash scripts/restore-backup.sh "$SNAPSHOT_ID"
+  bash scripts/restore.sh world "$SNAPSHOT_ID"
   docker compose up -d --wait --wait-timeout 600 minecraft-service
   docker compose up -d --force-recreate backup
 )
@@ -44,7 +44,7 @@ pre-restore directory. Verify the world and mod state in-game, then check that a
 backup contains the restored instance's current data. The script's completion message
 alone is not evidence of recovery. Retain `data/minecraft_pre_restore_*` until verified.
 
-The rollback script deletes the current world directory. Preserve any data you need
+`bash scripts/restore.sh rollback` deletes the current world directory. Preserve any data you need
 first, stop the backup worker, and use the same maintenance lock. Recreate the worker
 after rollback and verify health before reopening the server.
 

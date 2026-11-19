@@ -95,7 +95,7 @@ docker compose exec backup restic snapshots --tag pre-prune   # pick the ID
   restores each file with its `entities/` and `poi/` partners, and starts the game again:
 
   ```bash
-  bash scripts/restore-regions.sh <pre-prune-id> \
+  bash scripts/restore.sh regions <pre-prune-id> \
     world/dimensions/minecraft/overworld/region/r.2.-1.mca
   ```
 
