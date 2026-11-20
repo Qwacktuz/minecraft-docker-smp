@@ -40,7 +40,8 @@ server rollback                  # restore the safety backup (starts the VPS if 
 the VPS under **Actions** → **Server** → **Run workflow**. It runs the same
 `bin/server` on a GitHub runner. The VPS also **stops itself when idle**: after
 2 hours with nobody online (Carpet bots count as players), or after 7 days at
-most. Setup and how the runner gets its access: [docs/auto-stop.md](docs/auto-stop.md).
+most. A Cloudflare Worker (`watchdog/`) checks every 5 minutes and presses the
+stop button. Setup and how the runner gets its access: [docs/auto-stop.md](docs/auto-stop.md).
 
 **There is one world, it lives in R2, and only the VPS writes to it.** On the VPS,
 `stop` takes a backup and only shuts down once a snapshot newer than the stop

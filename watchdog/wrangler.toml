@@ -1,0 +1,24 @@
+# The idle auto-stop Worker (src/index.js). Deploy with `server watchdog`.
+name = "mc-idle-watchdog"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+HOST = "mc.cactuz.dev"
+PORT = "25565"
+IDLE_MINUTES = "120"   # stop after this long with nobody online (Carpet bots count)
+MAX_DAYS = "7"         # stop after this long regardless
+REPO = "Qwacktuz/minecraft-docker-smp"
+WORKFLOW = "server.yml"
+
+# When the VPS was first seen, when someone was last online, the last stop request.
+[[kv_namespaces]]
+binding = "STATE"
+id = "REPLACE_WITH_KV_ID"
+
+[observability]
+enabled = true

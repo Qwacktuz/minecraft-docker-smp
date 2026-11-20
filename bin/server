@@ -9,6 +9,7 @@
 #   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
 #   bin/server vault         copy the backups into the locked vault bucket now
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
+#   bin/server watchdog      deploy the idle auto-stop Worker (watchdog/, Cloudflare)
 #
 # Backups (read-only; they work from the laptop with no VPS):
 #   bin/server backups [--vault]        list the snapshots with their dates and tags
@@ -361,6 +362,32 @@ stop() {
   say "Stopped. The world is safe in R2."
 }
 
+# Deploys the idle auto-stop Worker (watchdog/) to Cloudflare with wrangler.
+# Runs under `secrets all`: WATCHDOG_CLOUDFLARE_TOKEN (Workers Scripts and KV
+# Edit) deploys it, WATCHDOG_GITHUB_TOKEN (Actions: read and write on this
+# repository only) becomes its one secret, and the account ID comes from R2_ENDPOINT.
+# shellcheck disable=SC2154 # R2_ENDPOINT and WATCHDOG_* come from sops exec-env
+watchdog_deploy() {
+  need wrangler
+  [[ -n "${WATCHDOG_CLOUDFLARE_TOKEN:-}" && -n "${WATCHDOG_GITHUB_TOKEN:-}" ]] ||
+    die "add WATCHDOG_CLOUDFLARE_TOKEN and WATCHDOG_GITHUB_TOKEN to secrets/infra.enc.env (docs/auto-stop.md)"
+  local account=${R2_ENDPOINT#https://} id
+  account=${account%%.*}
+  [[ "$account" =~ ^[0-9a-f]{32}$ ]] || die "could not read the Cloudflare account ID from R2_ENDPOINT"
+  export CLOUDFLARE_ACCOUNT_ID=$account CLOUDFLARE_API_TOKEN=$WATCHDOG_CLOUDFLARE_TOKEN
+  cd "$ROOT/watchdog"
+  if grep -q REPLACE_WITH_KV_ID wrangler.toml; then
+    say "Creating the Worker's KV namespace (once)..."
+    id=$(wrangler kv namespace create mc-idle-watchdog-state 2>&1 | grep -oE '[0-9a-f]{32}' | head -n1 || true)
+    [[ -n "$id" ]] || die "could not create the KV namespace"
+    sed -i.bak "s/REPLACE_WITH_KV_ID/$id/" wrangler.toml && rm -f wrangler.toml.bak
+    say "KV namespace $id written to watchdog/wrangler.toml; commit it."
+  fi
+  wrangler deploy
+  # The token goes to wrangler on stdin, never in its arguments.
+  printf '%s' "$WATCHDOG_GITHUB_TOKEN" | wrangler secret put GITHUB_TOKEN
+}
+
 # Deletes tailnet devices named $1 via the Tailscale API. Runs under
 # `secrets infra`, which provides the OAuth client credentials.
 # shellcheck disable=SC2154 # TF_VAR_* come from sops exec-env
@@ -613,7 +640,7 @@ unpin_args() {
   unpin "$id"
 }
 
-usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 # Runs tofu init with the state bucket from the decrypted infra secrets.
 # shellcheck disable=SC2154 # TOFU_BACKEND_* come from secrets/infra.enc.env
@@ -629,6 +656,7 @@ case "${1:-} ${2:-}" in
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
   "vault "*) vault ;;
+  "watchdog "*) say "Deploying the idle auto-stop Worker..."; secrets all _watchdog-deploy ;;
   "tofu "*) shift; tf_init; tf "$@" ;;
   "backups "*) backups "${2:-}" ;;
   "check "*) shift; check "$@" ;;
@@ -643,6 +671,7 @@ case "${1:-} ${2:-}" in
   "_vault-copy "*) vault_copy ;;
   "_pause-alerts "*) pause_alerts ;;
   "_forget-device "*) forget_device "$2" ;;
+  "_watchdog-deploy "*) watchdog_deploy ;;
   "_restic "*) shift; restic "$@" ;;
   "_check "*) RESTIC_NO_LOCK=1 APP_DIR="$ROOT" bash "$ROOT/scripts/test-backup.sh" "$2" ;;
   "_deploy "*) bash "$ROOT/scripts/deploy.sh" ;;

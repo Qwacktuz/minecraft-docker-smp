@@ -24,6 +24,10 @@
     rclone
     restic
 
+    # The idle auto-stop Worker (watchdog/): deployed with `server watchdog`
+    nodejs
+    wrangler
+
     # Checks (mirrors .github/workflows/validate.yml)
     shellcheck
     actionlint
@@ -55,6 +59,7 @@
       shellcheck scripts/*.sh bin/server
       actionlint
       python3 -m unittest discover -s tests
+      (cd watchdog && node --test && WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --outdir "$(mktemp -d)" >/dev/null)
       tofu -chdir=infra fmt -check
       tofu -chdir=infra init -backend=false -lockfile=readonly >/dev/null
       tofu -chdir=infra validate

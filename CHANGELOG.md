@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased: the idle auto-stop moves to a Cloudflare Worker (2026-11-20)
+
+- GitHub's scheduled workflow ran once in ten hours, so the idle auto-stop
+  couldn't be trusted. The **Cloudflare Worker `mc-idle-watchdog`**
+  (`watchdog/`) now checks every 5 minutes, with a Cloudflare cron trigger. It
+  uses the same rules (2 idle hours, Carpet bots count; 7-day cap) and starts the
+  Server workflow with `action=stop`.
+- Its only secret is a fine-grained GitHub token that can run workflows in this
+  repository. Its state is in Workers KV.
+- Deploy it with `server watchdog`. Its logic has Node tests (`node --test`), and
+  `validate` also dry-runs the wrangler build.
+- The `schedule` trigger and the "Anyone online?" job are gone from
+  `.github/workflows/server.yml`.
+
 ## Unreleased: pinned pre-prune backups (2026-11-20)
 
 - **Every pre-prune snapshot stays pinned** (`PRUNE_KEEP_SNAPSHOTS=0`) until an

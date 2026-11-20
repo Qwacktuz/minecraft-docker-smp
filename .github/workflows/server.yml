@@ -4,8 +4,9 @@ name: Server
 # It runs bin/server, exactly like the laptop, so the two never drift apart.
 #
 # - "Run workflow" (anyone with write access): start or stop the VPS.
-# - Every 15 minutes: if nobody (Carpet bots count) has been online for
-#   IDLE_MINUTES, or the VPS has been up for MAX_DAYS, run `bin/server stop`.
+# - The idle auto-stop: the Cloudflare Worker in watchdog/ checks the player
+#   count every 5 minutes and starts this workflow with action=stop. (GitHub's
+#   own schedule skipped most runs, so it isn't used.)
 #
 # Secrets: only the "prod" environment has them, and only main may use it
 # (repository settings). Its one secret is SOPS_AGE_KEY, a CI-only Age key
@@ -20,63 +21,13 @@ on:
         type: choice
         options: [start, stop]
         default: start
-  schedule:
-    # Off the full hour, when GitHub's scheduler is least busy.
-    - cron: "7,22,37,52 * * * *"
 
 permissions:
   contents: read
 
-env:
-  IDLE_MINUTES: 120
-  MAX_DAYS: 7
-
 jobs:
-  watch:
-    name: Anyone online?
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: write # keeps the idle state in the Actions cache
-    outputs:
-      stop: ${{ steps.check.outputs.stop }}
-    steps:
-      # Actions are pinned to commits (tag in the comment); Renovate bumps them.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # The newest saved state: when the VPS was first seen, when someone was last online.
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .idle
-          key: idle-${{ github.run_id }}
-          restore-keys: idle-
-
-      - name: Check the player count (no secrets needed)
-        id: check
-        run: python3 scripts/idle_check.py --state .idle/state.json --idle-minutes "$IDLE_MINUTES" --max-days "$MAX_DAYS"
-
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .idle
-          key: idle-${{ github.run_id }}
-
-      - name: Delete older idle states
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          CURRENT: idle-${{ github.run_id }}
-        run: |
-          gh cache list --key idle- --limit 100 --json id,key |
-            jq -r --arg current "$CURRENT" '.[] | select(.key != $current) | .id' |
-            xargs -r -n1 gh cache delete
-
   server:
-    name: bin/server ${{ inputs.action || 'stop' }}
-    needs: watch
-    # Runs on "Run workflow", or when the watch job says stop.
-    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.watch.outputs.stop == 'true') }}
+    name: bin/server ${{ inputs.action }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: prod
@@ -124,7 +75,7 @@ jobs:
 
       - name: Run bin/server
         env:
-          ACTION: ${{ inputs.action || 'stop' }}
+          ACTION: ${{ inputs.action }}
         run: |
           if [[ "$ACTION" == start ]]; then set -- start vps; else set -- stop; fi
           devenv shell bin/server "$@"
