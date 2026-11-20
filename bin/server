@@ -453,27 +453,43 @@ stop() {
   fi
   phase backup
   verified_backup "Server shutting down for a final backup..."
-  # The VPS disk holds the only other copy of the world: never delete it when
-  # the backups look damaged.
-  say "Checking the backups' integrity (reading 2% of the data)..."
-  phase check
-  local check
-  check=$(on vps "docker compose exec -T backup restic --retry-lock 2m check --read-data-subset 2%" 2>&1) ||
-    { tail -n 20 <<< "$check" >&2; die "the backups failed their integrity check; the server is still running"; }
   say "Stopping containers..."
   phase down
   on vps "docker compose down"
-  # A public download of the world (no player data); never blocks the stop.
-  phase world-zip
-  on vps "bash scripts/publish-world.sh" ||
-    echo "warning: could not publish world.zip; the backup in R2 is safe" >&2
-  phase publish-status
-  on vps "bash scripts/publish-status.sh" ||
-    echo "warning: could not publish backups.json for the web app" >&2
-  # The web map (BlueMap's tiles), also public and also never blocking.
-  phase map
-  on vps "bash scripts/publish-map.sh" ||
-    echo "warning: could not publish the map; the next VPS renders the changes again" >&2
+  phase
+  # The integrity check and the public copies run side by side; each job's
+  # output is printed once all are done. The check runs through lib.sh's
+  # restic, since the backup container is gone.
+  say "Checking the backups' integrity (reading 2% of the data) and publishing..."
+  local jobs out
+  out=$(mktemp -d)
+  ( timed check on vps ". scripts/lib.sh && restic --retry-lock 2m check --read-data-subset 2%" ) > "$out/check" 2>&1 &
+  jobs="check:$!"
+  # A public download of the world (no player data), the web app's status, and
+  # the web map (BlueMap's tiles): all public, none blocks the stop.
+  ( timed world-zip on vps "bash scripts/publish-world.sh" ) > "$out/world" 2>&1 &
+  jobs+=" world:$!"
+  ( timed publish-status on vps "bash scripts/publish-status.sh" ) > "$out/status" 2>&1 &
+  jobs+=" status:$!"
+  ( timed map on vps "bash scripts/publish-map.sh" ) > "$out/map" 2>&1 &
+  jobs+=" map:$!"
+  local job check=0 world=0 status=0 map=0
+  for job in $jobs; do
+    wait "${job#*:}" || printf -v "${job%:*}" %s 1
+  done
+  cat "$out/world" "$out/status" "$out/map"
+  (( world == 0 )) || echo "warning: could not publish world.zip; the backup in R2 is safe" >&2
+  (( status == 0 )) || echo "warning: could not publish backups.json for the web app" >&2
+  (( map == 0 )) || echo "warning: could not publish the map; the next VPS renders the changes again" >&2
+  # The VPS disk holds the only other copy of the world: never delete it when
+  # the backups look damaged.
+  if (( check != 0 )); then
+    tail -n 20 "$out/check" >&2
+    rm -rf "$out"
+    die "the backups failed their integrity check; the VPS is kept with the world on its disk (the game is stopped: 'bin/server start vps' starts it again)"
+  fi
+  grep '^--- ' "$out/check" || true
+  rm -rf "$out"
 
   say "Deleting the VPS..."
   phase destroy

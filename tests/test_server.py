@@ -208,9 +208,24 @@ class ServerTests(unittest.TestCase):
         result, calls = self.run_server("stop", VPS="1", CHECK_FAIL="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("integrity check", result.stderr)
+        self.assertIn("Fatal: repository contains errors", result.stderr)
+        self.assertIn("the VPS is kept", result.stderr)
         self.assertLess(self.find(calls, "backup now")[0], self.find(calls, "check --read-data-subset")[0])
-        self.assertFalse(self.find(calls, "compose down"))
         self.assertFalse(self.find(calls, "destroy"))
+        self.assertFalse(self.find(calls, "tailscale logout"))
+
+    def test_stop_checks_and_publishes_side_by_side_after_down(self):
+        result, calls = self.run_server("stop", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        down = self.find(calls, "compose down")[0]
+        destroy = self.find(calls, "destroy")[0]
+        for text in ("check --read-data-subset 2%", "publish-world.sh", "publish-status.sh", "publish-map.sh"):
+            self.assertLess(down, self.find(calls, text)[0], text)
+            self.assertLess(self.find(calls, text)[0], destroy, text)
+        # The backup container is gone: the check runs through lib.sh's restic.
+        check = " ".join(calls[self.find(calls, "check --read-data-subset")[0]]["argv"])
+        self.assertIn(". scripts/lib.sh && restic --retry-lock 2m check", check)
+        self.assertNotIn("docker compose exec", check)
 
     def test_stop_copies_the_backups_into_the_vault_after_destroy(self):
         result, calls = self.run_server("stop", VPS="1")
@@ -285,11 +300,11 @@ class ServerTests(unittest.TestCase):
         self.assertIn("could not publish world.zip", result.stderr)
         self.assertTrue(self.find(calls, "destroy"))
 
-    def test_stop_publishes_the_map_after_the_world_and_before_destroy(self):
+    def test_stop_publishes_the_map_before_destroy(self):
         result, calls = self.run_server("stop", VPS="1")
         self.assertEqual(result.returncode, 0, result.stderr)
         publish = self.find(calls, "publish-map.sh")[0]
-        self.assertLess(self.find(calls, "publish-world.sh")[0], publish)
+        self.assertLess(self.find(calls, "compose down")[0], publish)
         self.assertLess(publish, self.find(calls, "destroy")[0])
         # A failed map upload only warns; the VPS is still deleted.
         result, calls = self.run_server("stop", VPS="1", MAP_FAIL="1")
@@ -667,7 +682,9 @@ class ServerTests(unittest.TestCase):
         result, _ = self.run_server("stop", VPS="1", PHASE_LOG=str(timings))
         self.assertEqual(result.returncode, 0, result.stderr)
         names = [line.split()[0] for line in timings.read_text().splitlines()]
-        self.assertEqual(names, ["backup", "check", "down", "world-zip", "publish-status", "map", "destroy"])
+        self.assertEqual(names[:2], ["backup", "down"])
+        self.assertEqual(sorted(names[2:6]), ["check", "map", "publish-status", "world-zip"])  # side by side
+        self.assertEqual(names[6:], ["destroy"])
 
     def test_phases_go_to_the_github_step_summary(self):
         summary = Path(tempfile.mkdtemp()) / "summary"
