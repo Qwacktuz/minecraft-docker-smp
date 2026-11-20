@@ -15,6 +15,8 @@ import pin_mods  # noqa: E402
 COMPOSE = """services:
   minecraft-service:
     environment:
+      TYPE: FABRIC
+      VERSION: "26.3"
       MODRINTH_PROJECTS: |
         datapack:skull-portable
 
@@ -57,6 +59,9 @@ class FakeApi:
 
     def __call__(self, path, query=None):
         self.calls.append((path, query))
+        if path.startswith(pin_mods.FABRIC_META):
+            return [{"loader": {"version": "0.21.0", "stable": False}},
+                    {"loader": {"version": "0.20.1", "stable": True}}]
         if path == "projects":
             return [{"id": "P9", "slug": "hidden-lib"}]
         return VERSIONS.get(path.split("/")[1], [])
@@ -117,6 +122,13 @@ class PinModsTests(unittest.TestCase):
         self.assertEqual(text, COMPOSE)
         self.assertIn("fabric-api:fa000001 # 0.140.0", out)
         self.assertNotIn("fabricexporter", out)
+
+    def test_pins_stable_loader_for_compose_game_version(self):
+        code, text, _, _, api = self.run_pin(COMPOSE, "--write")
+        self.assertIn('      TYPE: FABRIC\n      FABRIC_LOADER_VERSION: "0.20.1"\n', text)
+        self.assertIn((f"{pin_mods.FABRIC_META}/26.3", None), api.calls)
+        _, again, _, _, _ = self.run_pin(text, "--write")
+        self.assertEqual(again.count("FABRIC_LOADER_VERSION"), 1)
 
     def test_real_compose_entries_all_parse(self):
         lines = (ROOT / "compose.yml").read_text().splitlines(keepends=True)

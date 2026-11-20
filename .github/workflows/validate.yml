@@ -5,6 +5,7 @@ name: Validate configuration
 on:
   pull_request:
   push:
+  workflow_dispatch: # mods.yml starts it for its branch
 
 permissions:
   contents: read

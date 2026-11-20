@@ -1,0 +1,82 @@
+name: Mod updates
+
+# Weekly, the same time as Renovate: re-run scripts/pin_mods.py on dev and
+# open (or refresh) one PR against dev with the new Modrinth version IDs and
+# the Fabric loader. Renovate can't read Modrinth, so this fills that gap.
+# You review and merge it; nothing goes live before dev reaches main and the
+# server next starts.
+#
+# Needs: Settings → Actions → General → "Allow GitHub Actions to create and
+# approve pull requests". Without it the branch is still pushed and the job
+# summary links to it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1" # Monday, before 9am Berlin
+
+permissions:
+  contents: read
+
+concurrency: mods
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the mods/update branch
+      pull-requests: write # open the PR
+      actions: write # start validate.yml (pushes by GITHUB_TOKEN don't)
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: mods/update
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: dev
+
+      - name: Pin the newest allowed versions
+        id: pin
+        run: |
+          status=0
+          python3 scripts/pin_mods.py --write 2> warnings.txt || status=$?
+          cat warnings.txt
+          if git diff --quiet; then echo "No mod updates."; exit 0; fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Push the branch and open the PR
+        if: steps.pin.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898729+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -qam "chore(mods): update pinned mods and Fabric loader"
+          git push -f origin "$BRANCH"
+          {
+            echo "\`scripts/pin_mods.py --write\` found newer versions."
+            echo
+            echo '```diff'
+            git diff HEAD~1 -U0 -- compose.yml | grep '^[-+] '
+            echo '```'
+            if [ -s warnings.txt ]; then
+              echo
+              echo "**Warnings** (fix in compose.yml, then run the workflow again):"
+              echo
+              sed 's/^/- /' warnings.txt
+            fi
+            echo
+            echo "Test on a local core before merging: alpha/beta mods and loader bumps can break a world."
+          } > body.md
+          if gh pr view "$BRANCH" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$BRANCH" --body-file body.md
+          elif ! gh pr create --base dev --head "$BRANCH" \
+              --title "chore(mods): update pinned mods" --body-file body.md; then
+            echo "Couldn't open the PR (see the note at the top of mods.yml)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Branch: ${{ github.server_url }}/${{ github.repository }}/compare/dev...$BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          gh workflow run validate.yml --ref "$BRANCH"
+
+      - name: Fail on warnings
+        if: steps.pin.outputs.status != '' && steps.pin.outputs.status != '0'
+        run: exit 1

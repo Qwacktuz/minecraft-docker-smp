@@ -3,6 +3,9 @@
 
     python3 scripts/pin_mods.py [--write] [--game-version 26.3]
 
+The game version defaults to VERSION in compose.yml. The Fabric loader
+(FABRIC_LOADER_VERSION) is pinned too: the newest stable loader for it.
+
 Run it on the laptop (it needs api.modrinth.com). Without --write it prints
 the new lines; with --write it rewrites compose.yml. For each active entry it
 picks the newest version for the game version and loader (fabric, or datapack
@@ -26,6 +29,7 @@ import urllib.parse
 import urllib.request
 
 API = "https://api.modrinth.com/v2"
+FABRIC_META = "https://meta.fabricmc.net/v2/versions/loader"
 COMPOSE = Path(__file__).resolve().parents[1] / "compose.yml"
 TYPES = ("release", "beta", "alpha")  # most stable first
 ENTRY = re.compile(
@@ -35,7 +39,8 @@ ALLOWED = re.compile(r"\[(alpha|beta|release)\]")
 
 
 def get(path, query=None, opener=urllib.request.urlopen):
-    url = f"{API}/{path}" + ("?" + urllib.parse.urlencode(query) if query else "")
+    base = path if path.startswith("https://") else f"{API}/{path}"
+    url = base + ("?" + urllib.parse.urlencode(query) if query else "")
     request = urllib.request.Request(url, headers={"User-Agent": "minecraft-docker-smp pin_mods.py"})
     with opener(request, timeout=30) as response:
         return json.load(response)
@@ -103,14 +108,41 @@ def pin(lines, game_version, fetch=get):
     return out, problems, missing
 
 
+def game_version_of(lines):
+    for line in lines:
+        if (match := re.match(r'^\s*VERSION:\s*"?([^"\s#]+)', line)):
+            return match[1]
+    raise SystemExit("no VERSION in compose.yml; pass --game-version")
+
+
+def pin_loader(lines, game_version, fetch=get):
+    """Sets FABRIC_LOADER_VERSION (after TYPE: FABRIC) to the newest stable loader."""
+    at = next((i for i, line in enumerate(lines) if re.match(r"^\s*TYPE:\s*FABRIC\s*$", line)), None)
+    if at is None:
+        return lines, []
+    stable = [entry["loader"]["version"] for entry in fetch(f"{FABRIC_META}/{game_version}")
+              if entry["loader"].get("stable")]
+    if not stable:
+        return lines, [f"fabric loader: no stable version for {game_version}; left as is"]
+    indent = re.match(r"^\s*", lines[at])[0]
+    new = f'{indent}FABRIC_LOADER_VERSION: "{stable[0]}"\n'
+    out = [line for line in lines if not re.match(r"^\s*FABRIC_LOADER_VERSION:", line)]
+    at = next(i for i, line in enumerate(out) if re.match(r"^\s*TYPE:\s*FABRIC\s*$", line))
+    out.insert(at + 1, new)
+    return out, []
+
+
 def main(argv=None, fetch=get):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true", help="rewrite compose.yml")
-    parser.add_argument("--game-version", default="26.3")
+    parser.add_argument("--game-version", help="default: VERSION in compose.yml")
     parser.add_argument("--compose", type=Path, default=COMPOSE)
     args = parser.parse_args(argv)
     lines = args.compose.read_text().splitlines(keepends=True)
-    out, problems, missing = pin(lines, args.game_version, fetch)
+    game_version = args.game_version or game_version_of(lines)
+    out, problems, missing = pin(lines, game_version, fetch)
+    out, loader_problems = pin_loader(out, game_version, fetch)
+    problems += loader_problems
     for problem in problems:
         print(f"warning: {problem}", file=sys.stderr)
     if missing:
@@ -121,7 +153,8 @@ def main(argv=None, fetch=get):
     if args.write:
         args.compose.write_text("".join(out))
     else:
-        sys.stdout.writelines(new for old, new in zip(lines, out) if old != new)
+        old = set(lines)
+        sys.stdout.writelines(line for line in out if line not in old)
     return 1 if problems else 0
 
 

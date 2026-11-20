@@ -163,9 +163,14 @@ The Dependency Dashboard issue lists everything pending. Not covered:
 - `devenv.lock`: run `devenv update`.
 - The SOPS version and checksums in `infra/cloud-init.yaml`.
 - MCA Selector in `scripts/prune.sh`.
-- The mods in `MODRINTH_PROJECTS` and the Fabric loader: not pinned yet, so each
-  start downloads the newest allowed version. `python3 scripts/pin_mods.py`
-  (on the laptop; `--write` to apply) pins every mod to a Modrinth version ID.
+- The mods in `MODRINTH_PROJECTS` and the Fabric loader: pinned to Modrinth
+  version IDs and a loader version. `.github/workflows/mods.yml` runs
+  `scripts/pin_mods.py --write` every Monday and opens one PR against `dev`
+  (never automerged). Run it by hand with `python3 scripts/pin_mods.py`
+  (`--write` to apply).
+- The game version (`VERSION` in compose.yml). To move to a new one: set
+  `VERSION`, run `python3 scripts/pin_mods.py --write`, comment out the mods it
+  warns about, and test on a local core.
 
 Bump those by hand.
 
