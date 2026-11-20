@@ -1,18 +1,27 @@
 // The live status: DNS + server list ping (shared with the watchdog) and the
 // watchdog's KV state. The ping is cached for 30 s so page loads don't each
 // open a connection to the game.
-import { playersOnline, vpsAddress } from '../../../../watchdog/src/minecraft.js';
+import { serverStatus, vpsAddress } from '../../../../watchdog/src/minecraft.js';
 import type { WatchdogState } from '../../../../watchdog/src/logic.js';
 import { describe, type Status } from '../status';
 import type { Env } from './env';
 
 const CACHE_SECONDS = 30;
 
-async function ping(env: Env): Promise<{ address: string | null; online: number | null }> {
+interface Ping {
+	address: string | null;
+	online: number | null;
+	names: string[];
+}
+
+async function ping(env: Env): Promise<Ping> {
 	// HOST=localhost in .dev.vars pings a local copy (`server start local`) in `npm run dev`.
 	const address = env.HOST === 'localhost' ? '127.0.0.1' : await vpsAddress(env.HOST);
-	const online = address === null ? null : await playersOnline(address, env.HOST, Number(env.PORT));
-	return { address, online };
+	// `npm run dev` runs this in Node, which has no cloudflare:sockets.
+	// import.meta.env.DEV is replaced at build time, so the Worker build leaves ping-node out.
+	const statusOf = import.meta.env.DEV ? (await import('./ping-node')).nodeServerStatus : serverStatus;
+	const status = address === null ? null : await statusOf(address, env.HOST, Number(env.PORT));
+	return { address, online: status?.online ?? null, names: status?.names ?? [] };
 }
 
 export async function getStatus(env: Env): Promise<Status> {
@@ -20,7 +29,7 @@ export async function getStatus(env: Env): Promise<Status> {
 	const key = new Request(`https://cache.internal/status/${env.HOST}`);
 	const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
 	const hit = await cache?.match(key);
-	let result = hit ? ((await hit.json()) as { address: string | null; online: number | null; at: number }) : undefined;
+	let result = hit ? ((await hit.json()) as Ping & { at: number }) : undefined;
 	if (!result) {
 		result = { ...(await ping(env)), at: Math.floor(Date.now() / 1000) };
 		await cache?.put(
@@ -32,5 +41,5 @@ export async function getStatus(env: Env): Promise<Status> {
 	return describe(result.address, result.online, state, result.at, {
 		idleMinutes: Number(env.IDLE_MINUTES),
 		maxDays: Number(env.MAX_DAYS)
-	});
+	}, result.names ?? []);
 }

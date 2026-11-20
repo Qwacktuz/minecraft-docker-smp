@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: player names on the web page (2026-11-20)
+
+- The public page lists who's online, with skin heads (mc-heads.net), from the
+  server list ping's sample. Players hidden from the server list aren't named.
+- `watchdog/src/logic.js` gains `parseStatusDetails` (online, max, names);
+  `parseStatus` and the watchdog's behaviour are unchanged.
+- `npm run dev` can ping a local copy now (`HOST=localhost` in `web/.dev.vars`,
+  which is git-ignored): it uses `node:net` there, since Node has no
+  `cloudflare:sockets`.
+
 ## Unreleased: a web app (2026-11-20)
 
 - **`web/`: a SvelteKit app on a Cloudflare Worker at smp.cactuz.dev.** The

@@ -6,6 +6,8 @@ export interface Status {
 	/** 'off': no VPS. 'starting': VPS exists but the game doesn't answer. 'online': it answers. */
 	state: 'off' | 'starting' | 'online';
 	players: number | null;
+	/** Who's online, from the server's sample: maybe fewer names than players. */
+	names: string[];
 	/** Unix seconds, or null when unknown. */
 	upSince: number | null;
 	lastBusy: number | null;
@@ -20,10 +22,11 @@ export function describe(
 	online: number | null,
 	state: WatchdogState,
 	now: number,
-	{ idleMinutes, maxDays }: { idleMinutes: number; maxDays: number }
+	{ idleMinutes, maxDays }: { idleMinutes: number; maxDays: number },
+	names: string[] = []
 ): Status {
 	if (address === null) {
-		return { state: 'off', players: null, upSince: null, lastBusy: null, stopAt: null, stopReason: null, checked: now };
+		return { state: 'off', players: null, names: [], upSince: null, lastBusy: null, stopAt: null, stopReason: null, checked: now };
 	}
 	// The watchdog's state belongs to an older VPS when the address changed.
 	const known = state.address === address;
@@ -43,6 +46,7 @@ export function describe(
 	return {
 		state: online === null ? 'starting' : 'online',
 		players: online,
+		names: online ? names : [],
 		upSince,
 		lastBusy,
 		stopAt,

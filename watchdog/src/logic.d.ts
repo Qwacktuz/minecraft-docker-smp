@@ -9,6 +9,13 @@ export interface WatchdogState {
 export function varint(n: number): number[];
 export function readVarint(bytes: Uint8Array, offset: number): [number, number] | null;
 export function statusRequest(host: string, port: number): Uint8Array;
+export interface ServerStatus {
+  online: number;
+  max: number;
+  /** The server's sample of who's online: sorted, maybe shorter than online. */
+  names: string[];
+}
+export function parseStatusDetails(bytes: Uint8Array): ServerStatus | null;
 export function parseStatus(bytes: Uint8Array): number | null;
 export function decide(
   previous: WatchdogState,

@@ -20,6 +20,9 @@ export interface WorkflowRun {
 }
 
 export function vpsAddress(host: string): Promise<string | null>;
+import type { ServerStatus } from './logic.js';
+
+export function serverStatus(address: string, host: string, port: number): Promise<ServerStatus | null>;
 export function playersOnline(address: string, host: string, port: number): Promise<number | null>;
 export function github(env: GitHubEnv, path: string, init?: RequestInit): Promise<Response>;
 export function recentRuns(env: GitHubEnv, count?: number): Promise<WorkflowRun[]>;

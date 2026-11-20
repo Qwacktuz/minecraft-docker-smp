@@ -39,11 +39,16 @@ export function statusRequest(host, port) {
   return new Uint8Array([...varint(handshake.length), ...handshake, ...varint(1), ...varint(0)]);
 }
 
+/** The UUID the server lists for players who turned off "Allow Server Listings". */
+const ANONYMOUS = "00000000-0000-0000-0000-000000000000";
+
 /**
  * Parses a status response from the bytes received so far.
- * Returns the number of players online, or null while more bytes are needed.
+ * Returns { online, max, names }, or null while more bytes are needed. names is
+ * the server's sample of who's online (vanilla lists up to 12), sorted, without
+ * anonymous entries or formatting codes. It can be shorter than online.
  */
-export function parseStatus(bytes) {
+export function parseStatusDetails(bytes) {
   const length = readVarint(bytes, 0);
   if (!length) return null;
   const [packetLength, start] = length;
@@ -53,7 +58,18 @@ export function parseStatus(bytes) {
   const text = readVarint(bytes, id[1]);
   if (!text) throw new Error("truncated status");
   const json = new TextDecoder().decode(bytes.subarray(text[1], text[1] + text[0]));
-  return Number(JSON.parse(json).players.online);
+  const players = JSON.parse(json).players;
+  const names = (Array.isArray(players.sample) ? players.sample : [])
+    .filter((player) => typeof player?.name === "string" && player.id !== ANONYMOUS)
+    .map((player) => player.name.replace(/\u00a7./g, "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+  return { online: Number(players.online), max: Number(players.max), names };
+}
+
+/** Players online from a status response, or null while more bytes are needed. */
+export function parseStatus(bytes) {
+  return parseStatusDetails(bytes)?.online ?? null;
 }
 
 /**

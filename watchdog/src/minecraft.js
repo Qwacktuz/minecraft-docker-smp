@@ -2,7 +2,7 @@
 // and the web app (web/). Needs the Workers runtime (cloudflare:sockets).
 //
 // env: HOST, PORT, REPO, WORKFLOW, GITHUB_TOKEN.
-import { parseStatus, statusRequest } from "./logic.js";
+import { parseStatusDetails, statusRequest } from "./logic.js";
 
 const PING_TIMEOUT_MS = 5000;
 
@@ -17,6 +17,11 @@ export async function vpsAddress(host) {
 
 /** Players online, or null when the game doesn't answer. */
 export async function playersOnline(address, host, port) {
+  return (await serverStatus(address, host, port))?.online ?? null;
+}
+
+/** { online, max, names } from the server list ping, or null when the game doesn't answer. */
+export async function serverStatus(address, host, port) {
   let socket;
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -39,8 +44,8 @@ export async function playersOnline(address, host, port) {
         joined.set(bytes);
         joined.set(value, bytes.length);
         bytes = joined;
-        const online = parseStatus(bytes);
-        if (online !== null) return online;
+        const status = parseStatusDetails(bytes);
+        if (status !== null) return status;
       }
     })();
     return await Promise.race([ping, timeout]);

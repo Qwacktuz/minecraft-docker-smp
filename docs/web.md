@@ -3,8 +3,8 @@
 A SvelteKit app in `web/`, running as a Cloudflare Worker. It doesn't replace
 `bin/server`: it shows what's going on and presses the same buttons.
 
-- **`/`, public:** is the server up, how many players are online, how long until
-  the idle auto-stop, how to join, and the `world.zip` download. It reloads the
+- **`/`, public:** is the server up, who's online (names and skin heads), how
+  long until the idle auto-stop, how to join, and the `world.zip` download. It reloads the
   numbers every 30 seconds (`/api/status`).
 - **`/admin`, behind Cloudflare Access:** Start/Redeploy and Stop buttons, the
   Server workflow's recent runs with their steps as they go, and the backup list.
@@ -81,7 +81,9 @@ npm test           # Vitest: status and run formatting
 In `npm run dev` there's no Access, so `/admin` is open and signed in as
 `dev@localhost`. Local KV and R2 start empty (the page shows "no backup list
 yet"). For the live ping against a local copy, run `server start local` and put
-`HOST=localhost` in `web/.dev.vars`; for the runs list and buttons, add a
+`HOST=localhost` in `web/.dev.vars` (git-ignored). The dev server runs in Node,
+so it pings over `node:net` (`web/src/lib/server/ping-node.ts`); the deployed
+Worker uses `cloudflare:sockets`; for the runs list and buttons, add a
 `GITHUB_TOKEN=` there too (a token that can only run this repository's
 workflows; the buttons really start the VPS).
 
@@ -95,4 +97,10 @@ Files:
 - `web/src/hooks.server.ts`, `web/src/lib/server/access.ts`: the Access check.
 - `web/src/lib/status.ts`, `runs.ts`: what the pages show (pure, tested).
 - `web/src/lib/server/`: KV, R2 and GitHub reads.
+
+**Player names** come from the server list ping's `players.sample`, the same list
+the multiplayer screen shows: vanilla sends at most 12, players who turned off
+"Allow Server Listings" are left out, and vanished players (the Vanish mod) don't
+appear. So the page can name fewer people than it counts. The skin heads load
+from mc-heads.net in the viewer's browser.
 - `watchdog/src/minecraft.js`: DNS, ping and GitHub calls, shared with the watchdog.

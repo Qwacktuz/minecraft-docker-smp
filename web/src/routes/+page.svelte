@@ -70,6 +70,27 @@
 				</div>
 			</div>
 		</div>
+		{#if status.players}
+			<div class="online">
+				<h2>Online now</h2>
+				{#if status.names.length}
+					<ul class="names">
+						{#each status.names as name (name)}
+							<li>
+								<img src="https://mc-heads.net/avatar/{encodeURIComponent(name)}/24" alt="" width="24" height="24" loading="lazy" />
+								{name}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if status.names.length < status.players}
+					<p class="muted" style="font-size:0.85rem;margin:8px 0 0">
+						{status.names.length ? `and ${status.players - status.names.length} more` : `${status.players} online`}
+						(the server doesn't name everyone)
+					</p>
+				{/if}
+			</div>
+		{/if}
 		<p class="muted" style="margin-bottom:0;font-size:0.85rem">
 			It stops itself after {data.idleMinutes / 60} hours with nobody online (bots count) or after
 			{data.maxDays} days, and backs up first.

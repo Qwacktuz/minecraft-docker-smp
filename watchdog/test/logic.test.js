@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decide, parseStatus, readVarint, shouldDispatch, statusRequest, varint } from "../src/logic.js";
+import { decide, parseStatus, parseStatusDetails, readVarint, shouldDispatch, statusRequest, varint } from "../src/logic.js";
 
 const HOUR = 3600;
 const config = { idleMinutes: 120, maxDays: 7 };
@@ -18,8 +18,9 @@ test("status request starts with its length and ends with the status request", (
   assert.deepEqual([...bytes.slice(-2)], [1, 0]);
 });
 
-function statusPacket(online) {
-  const body = new TextEncoder().encode(JSON.stringify({ players: { online, max: 20 }, description: "x".repeat(300) }));
+function statusPacket(online, sample) {
+  const players = { online, max: 20, ...(sample && { sample }) };
+  const body = new TextEncoder().encode(JSON.stringify({ players, description: "x".repeat(300) }));
   const packet = [...varint(0), ...varint(body.length), ...body];
   return new Uint8Array([...varint(packet.length), ...packet]);
 }
@@ -28,6 +29,18 @@ test("parses the player count, waiting for the whole packet", () => {
   const bytes = statusPacket(3);
   assert.equal(parseStatus(bytes.subarray(0, 10)), null);
   assert.equal(parseStatus(bytes), 3);
+});
+
+test("lists the sampled names: sorted, no anonymous players or formatting codes", () => {
+  const sample = [
+    { name: "zed", id: "2b0e3c1a-0000-0000-0000-000000000001" },
+    { name: "Anonymous Player", id: "00000000-0000-0000-0000-000000000000" },
+    { name: "\u00a7aAlex", id: "2b0e3c1a-0000-0000-0000-000000000002" },
+    { name: "bot_farm", id: "2b0e3c1a-0000-0000-0000-000000000003" },
+  ];
+  assert.deepEqual(parseStatusDetails(statusPacket(4, sample)), { online: 4, max: 20, names: ["Alex", "bot_farm", "zed"] });
+  assert.deepEqual(parseStatusDetails(statusPacket(0)).names, []);
+  assert.equal(parseStatus(statusPacket(4, sample)), 4);
 });
 
 test("no DNS record means no VPS and clears the state", () => {

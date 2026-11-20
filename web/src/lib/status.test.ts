@@ -31,6 +31,13 @@ group('describe', () => {
 		expect(s.stopReason).toBe('max-uptime');
 	});
 
+	test('names are kept only while someone is online', () => {
+		const state = { address: ip, up_since: 0, last_busy: 0 };
+		expect(describe(ip, 2, state, 10, config, ['Alex', 'zed']).names).toEqual(['Alex', 'zed']);
+		expect(describe(ip, 0, state, 10, config, ['stale']).names).toEqual([]);
+		expect(describe(null, null, state, 10, config).names).toEqual([]);
+	});
+
 	test('state from an older VPS is ignored', () => {
 		const s = describe(ip, null, { address: '198.51.100.9', up_since: 0, last_busy: 0 }, 50, config);
 		expect(s.state).toBe('starting');
