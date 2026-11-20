@@ -210,6 +210,11 @@ tests use mocks and dummy credentials.
   and restic with secrets passed by name, against R2 or the vault).
 - `scripts/regions.py`: block coordinates to region files, for `restore --region`.
 - `compose.yml`, `static/icon.png`: the game and its backups.
+- `config/`: mod configs kept in Git; copied over the world's at every start
+  ([config/README.md](config/README.md)).
+- `scripts/smoke-test.sh`: boots the mod list and `config/` on a fresh,
+  throwaway world (Docker and internet; not run by CI). Use it after changing
+  mods, e.g. `scripts/smoke-test.sh 'rcon:list'`.
 - `infra/`: Hetzner VPS, firewall, DNS, Tailscale bootstrap, cloud-init.
 - `secrets/`: SOPS-encrypted settings.
 - `tests/`: mocked lifecycle and configuration tests.

@@ -55,6 +55,12 @@ services:
       USE_AIKAR_FLAGS: "${USE_AIKAR_FLAGS:-false}"
       MEMORY: 5G
 
+      # Mod configs in Git: the image copies ./config (mounted at /config) into
+      # /data/config at every start, and Git's copy wins even when the live
+      # file is newer. Only files present in ./config are replaced; every
+      # other config stays as the world has it. See config/README.md.
+      SYNC_SKIP_NEWER_IN_DESTINATION: false
+
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: fBtCTb
       # VERSION_FROM_MODRINTH_PROJECTS: true
@@ -119,6 +125,7 @@ services:
 
     volumes:
       - ./static/icon.png:/icon.png
+      - ./config:/config:ro
       - ./data/minecraft:/data
 
     healthcheck:

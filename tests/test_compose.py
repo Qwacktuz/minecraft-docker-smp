@@ -51,6 +51,14 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(services["minecraft-service"]["environment"]["VERSION"], "26.3")
         self.assertTrue(services["backup"]["volumes"][0]["read_only"])
 
+    def test_git_configs_are_mounted_read_only_and_win(self):
+        game = json.loads(self.render().stdout)["services"]["minecraft-service"]
+        mount = next(v for v in game["volumes"] if v["target"] == "/config")
+        self.assertEqual(Path(mount["source"]), ROOT / "config")
+        self.assertTrue(mount["read_only"])
+        self.assertEqual(game["environment"]["SYNC_SKIP_NEWER_IN_DESTINATION"], "false")
+        self.assertTrue((ROOT / "config/README.md").is_file())
+
     def test_backups_run_only_with_the_backup_profile(self):
         result = self.render(profiles="")
         self.assertEqual(result.returncode, 0, result.stderr)
