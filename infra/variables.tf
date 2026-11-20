@@ -79,7 +79,7 @@ variable "server_image" {
 }
 
 variable "server_location" {
-  description = "Datacenter location"
+  description = "Datacenter location for a new VPS; bin/server passes it from SERVER_LOCATIONS"
   type        = string
   default     = "hel1"
 }
