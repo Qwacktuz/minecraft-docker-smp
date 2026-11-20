@@ -70,7 +70,8 @@ restore. Restores only consider snapshots from the VPS backup host
 
 **A web page:** **https://smp.cactuz.dev** shows whether the server is up, who's
 online, what it runs on, when it will stop itself, and links to the map and the
-world download. Admins sign in at `/admin` (Cloudflare Access) to start or stop
+world download. `/leaderboard` ranks players by playtime, distance, blocks
+placed and mined, kills and deaths. Admins sign in at `/admin` (Cloudflare Access) to start or stop
 it, follow the run step by step, and see the hardware, this month's hours and
 cost, the backups and the whitelist. It runs the same GitHub workflow as the
 button above. Setup and local development: [docs/web.md](docs/web.md).
@@ -229,8 +230,9 @@ tests use mocks and dummy credentials.
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
-- `scripts/publish-status.sh`: the backup list, whitelist and hardware for the web
-  app (`backups.json`, `players.json`, `vps.json`; `scripts/web_status.py`).
+- `scripts/publish-status.sh`: the backup list, whitelist, hardware and
+  leaderboard for the web app (`backups.json`, `players.json`, `vps.json`,
+  `leaderboard.json`; `scripts/web_status.py`, `scripts/leaderboard.py`).
 - `web/`: the web app (SvelteKit on a Cloudflare Worker), `server web` deploys it.
 - `watchdog/`: the idle auto-stop Worker; `watchdog/src/minecraft.js` is shared with `web/`.
 - `scripts/publish-map.sh`, `config/bluemap/`: the public web map.

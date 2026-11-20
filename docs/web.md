@@ -6,7 +6,9 @@ A SvelteKit app in `web/`, running as a Cloudflare Worker. It doesn't replace
 - **`/`, public:** is the server up, who's online (names and skin heads), how
   long until the idle auto-stop, what it runs on (e.g. "Hetzner CX33 · 4 vCPU ·
   8 GB RAM · Helsinki"), how to join, and links to the web map (`MAP_URL`) and
-  the `world.zip` download. It reloads the
+  the `world.zip` download.
+- **`/leaderboard`, public:** top 10s for playtime, distance travelled, elytra
+  distance, blocks placed, blocks mined, mobs killed and deaths, with skin heads. It reloads the
   numbers every 30 seconds (`/api/status`).
 - **`/admin`, behind Cloudflare Access:** Start/Redeploy and Stop buttons, the
   Server workflow's recent runs with their steps as they go, the VPS's hardware
@@ -21,7 +23,7 @@ browser ──► smp.cactuz.dev (Worker: web/)
               ├─ DNS + server list ping   watchdog/src/minecraft.js (shared with the watchdog)
               ├─ STATE (Workers KV)        the watchdog's state: up since, last busy
               ├─ GitHub API                dispatch server.yml on main; list runs and steps
-              └─ WEB (R2: mc-smp-web)      backups.json, players.json, vps.json, written by the VPS
+              └─ WEB (R2: mc-smp-web)      backups.json, players.json, vps.json, leaderboard.json, written by the VPS
 ```
 
 - **Start and Stop** start the GitHub "Server" workflow on `main`, exactly like
@@ -40,6 +42,14 @@ browser ──► smp.cactuz.dev (Worker: web/)
   the hardware only while DNS points at the address in `vps.json`, so an older
   VPS's file never shows. The bucket is private: only the Worker reads it, and
   the whitelist only appears on `/admin`.
+- **The leaderboard** comes from `scripts/leaderboard.py`, which
+  `publish-status.sh` runs at every start and stop. It reads each player's
+  stats file in the world (the game's own statistics) and, for blocks placed,
+  Ledger's database (`world/ledger.sqlite`, opened read-only), leaving out what
+  an op rolled back. Only whitelisted players and ops are listed, so Carpet
+  bots don't top the boards. It publishes totals only: no positions,
+  inventories or times. A board nobody has a number on (e.g. blocks placed
+  without Ledger) isn't shown.
 - **Usage** comes from the watchdog, which counts the minutes it sees a VPS per
   server type (`usage:YYYY-MM` in the shared KV; [auto-stop.md](auto-stop.md)).
   The cost is each type's hours × its price in `[vars.HOURLY_PRICES_EUR]`

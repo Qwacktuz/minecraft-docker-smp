@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased: leaderboards (2026-11-20)
+
+- **https://smp.cactuz.dev/leaderboard**: top 10s for playtime, distance
+  travelled (every way of moving), elytra distance, blocks placed, blocks
+  mined, mobs killed and deaths, linked from the header.
+- `scripts/leaderboard.py` reads the game's per-player stats and, for blocks
+  placed, Ledger's database (read-only; rolled-back placements don't count).
+  Only whitelisted players and ops are listed, so Carpet bots stay out.
+  `publish-status.sh` publishes `leaderboard.json` to the web bucket at every
+  start and stop; a failure only warns.
+
 ## Unreleased: Discord notifications, monthly usage, map link (2026-11-20)
 
 - **Discord** ([docs/notifications.md](docs/notifications.md)): with

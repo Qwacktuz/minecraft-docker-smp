@@ -7,10 +7,13 @@
 # - backups.json: snapshot IDs, times and tags, no world data (a Worker can't
 #   run restic).
 # - players.json: the whitelist with op flags (scripts/web_status.py players).
+# - leaderboard.json: each whitelisted player's totals for the public
+#   leaderboards (scripts/leaderboard.py): playtime, distance, blocks mined
+#   and placed... At a stop it has the whole session.
 # - vps.json, only when bin/server passes SERVER_TYPE, SERVER_LOCATION and
 #   SERVER_IPV4 (at start): the server type and the machine's hardware.
 #
-# Only the backup list is required; the other two only warn when they fail.
+# Only the backup list is required; the others only warn when they fail.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -40,6 +43,9 @@ restic --no-lock snapshots --host "$WORLD_HOST" --json |
 
 python3 scripts/web_status.py players data/minecraft > "$OUT/players.json" ||
   { rm -f "$OUT/players.json"; warn "could not read the whitelist; players.json not updated"; }
+
+python3 scripts/leaderboard.py data/minecraft > "$OUT/leaderboard.json" ||
+  { rm -f "$OUT/leaderboard.json"; warn "could not read the player stats; leaderboard.json not updated"; }
 
 if [[ -n "${SERVER_TYPE:-}" ]]; then
   python3 scripts/web_status.py vps "$SERVER_TYPE" "${SERVER_LOCATION:-}" "${SERVER_IPV4:-}" > "$OUT/vps.json" ||
