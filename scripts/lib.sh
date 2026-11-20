@@ -81,5 +81,42 @@ r2_rclone() {
 MAP_WEB=data/minecraft/bluemap/web
 MAP_PREFIX=map
 
-# Gives the world files back to the game's user (uid 1000).
-fix_owner() { docker run --rm -v "$PWD/data/minecraft:/data" "$ALPINE_IMAGE" chown -R 1000:1000 /data; }
+# Gives the world files back to the game's user (uid 1000). Only files someone
+# else owns are changed (the map pull's, mostly): a restic restore as root
+# already keeps the snapshot's owner, and the world has many small files.
+fix_owner() {
+  docker run --rm -v "$PWD/data/minecraft:/data" "$ALPINE_IMAGE" sh -c \
+    'find /data \( ! -user 1000 -o ! -group 1000 \) -print0 | xargs -0 -r chown -h 1000:1000'
+}
+
+# --- Phase timings (docs/performance.md) ---------------------------------------
+# `phase <name>` ends the running phase (if any) and starts <name>; `phase` with
+# no name only ends it. Each finished phase prints "--- <name> <seconds>s",
+# appends "<name> <seconds>" to $PHASE_LOG when that is set, and adds a table
+# row to GitHub's step summary in Actions. bin/server collects the lines that
+# deploy.sh prints on the VPS the same way (phase_lines).
+PHASE_NAME=
+PHASE_START=0
+phase_done() {
+  echo "--- $1 ${2}s"
+  if [[ -n "${PHASE_LOG:-}" ]]; then echo "$1 $2" >> "$PHASE_LOG"; fi
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then echo "| $1 | ${2}s |" >> "$GITHUB_STEP_SUMMARY"; fi
+  return 0
+}
+phase() {
+  local now
+  now=$(date +%s)
+  if [[ -n "$PHASE_NAME" ]]; then phase_done "$PHASE_NAME" "$((now - PHASE_START))"; fi
+  PHASE_NAME=${1:-}
+  PHASE_START=$now
+}
+# `timed <name> <command...>` runs one command as its own phase and keeps its
+# exit status; for jobs that run side by side (deploy.sh's restore).
+timed() {
+  local name=$1 start status=0
+  shift
+  start=$(date +%s)
+  "$@" || status=$?
+  phase_done "$name" "$(($(date +%s) - start))"
+  return "$status"
+}

@@ -84,3 +84,15 @@ variable "server_location" {
   default     = "hel1"
 }
 
+
+variable "staging" {
+  description = "A staging VPS (bin/server start staging): no DNS, its own SSH key and firewall, labelled purpose=perf-staging"
+  type        = bool
+  default     = false
+}
+
+variable "staging_ssh_public_key" {
+  description = "The staging VPS's Hetzner SSH key (bin/server creates it; Hetzner refuses a duplicate of ssh_public_key)"
+  type        = string
+  default     = ""
+}

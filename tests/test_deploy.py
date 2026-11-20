@@ -43,6 +43,8 @@ if name == "docker":
     if "r2:pub/map" in args and os.environ.get("RCLONE_LOG"):
         with open(os.environ["RCLONE_LOG"], "a") as seen:
             seen.write(f"{os.environ['RCLONE_CONFIG_R2_ACCESS_KEY_ID']} {os.environ['RCLONE_CONFIG_R2_ENDPOINT']}\n")
+    if "restore" in args and stage == "restore":
+        sys.exit(1)
     if "restore" in args:  # restic restore writes the world into data/minecraft
         Path("data/minecraft/world").mkdir(parents=True, exist_ok=True)
         Path("data/minecraft/world/level.dat").touch()
@@ -75,7 +77,7 @@ class DeployTests(unittest.TestCase):
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log),
                    PATH=f"{binary}:{os.environ['PATH']}", **extra)
-        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE", "MOCK_PUBLIC", "RCLONE_LOG"):
+        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE", "MOCK_PUBLIC", "RCLONE_LOG", "PHASE_LOG", "GITHUB_STEP_SUMMARY"):
             if key not in extra:
                 env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
@@ -124,8 +126,12 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         index = lambda match: next(i for i, call in enumerate(calls) if match(call))
         pull = index(lambda call: "r2:pub/map" in call)
-        self.assertLess(index(lambda call: "restore" in call and "latest" in call), pull)
-        self.assertLess(pull, index(lambda call: "chown" in call))
+        restore = index(lambda call: "restore" in call and "latest" in call)
+        # Side by side with the restore, after the old world moved aside, and
+        # both finish before the owner fix and the start.
+        self.assertLess(index(lambda call: any("minecraft.previous" in arg for arg in call)), pull)
+        chown = index(lambda call: any("chown" in arg for arg in call))
+        self.assertLess(max(pull, restore), chown)
         self.assertLess(pull, index(lambda call: "up" in call))
         self.assertEqual(calls[pull][calls[pull].index("r2:pub/map") + 1], "/data/bluemap/web")
         self.assertIn("copy", calls[pull])  # never sync: nothing is deleted
@@ -136,6 +142,31 @@ class DeployTests(unittest.TestCase):
         self.assertFalse(any("r2:pub/map" in call for call in calls))
         _, result, calls = self.run_deploy(RESTORE="latest")
         self.assertFalse(any(any(arg.startswith("r2:") for arg in call) for call in calls))
+
+    def test_a_failed_restore_stops_after_the_map_pull(self):
+        _, result, calls = self.run_deploy("restore", RESTORE="latest", MOCK_PUBLIC="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("The restore of latest failed", result.stderr)
+        self.assertTrue(any("r2:pub/map" in call for call in calls))
+        self.assertFalse(any("up" in call for call in calls))
+
+    def test_phases_are_timed(self):
+        timings = Path(tempfile.mkdtemp()) / "timings"
+        self.addCleanup(shutil.rmtree, timings.parent)
+        _, result, _ = self.run_deploy(RESTORE="latest", MOCK_PUBLIC="1", PHASE_LOG=str(timings))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names = [line.split()[0] for line in timings.read_text().splitlines()]
+        self.assertEqual(sorted(names), sorted(
+            ["decrypt", "image-pull", "restic-restore", "map-pull", "chown", "compose-up"]))
+        for line in timings.read_text().splitlines():
+            self.assertRegex(line, r"^[a-z-]+ \d+$")
+        self.assertRegex(result.stdout, r"(?m)^--- compose-up \d+s$")
+
+    def test_owner_fix_changes_only_files_with_another_owner(self):
+        _, result, calls = self.run_deploy(RESTORE="latest")
+        chown = next(call for call in calls if any("chown" in arg for arg in call))
+        self.assertIn("! -user 1000 -o ! -group 1000", chown[-1])
+        self.assertNotIn("chown -R", chown[-1])
 
     def test_a_failed_map_pull_only_warns(self):
         _, result, calls = self.run_deploy("map-pull", RESTORE="latest", MOCK_PUBLIC="1")

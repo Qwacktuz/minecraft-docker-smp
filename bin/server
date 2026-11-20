@@ -9,6 +9,10 @@
 #   bin/server stop [local|vps]  shut down; on the VPS: final backup, delete the
 #                            VPS. With both running, name which one.
 #   bin/server status        where is the world running?
+#   bin/server start staging  a throwaway test VPS (mc-staging) from the newest
+#                            backup: read-only toward R2, no DNS, no publishing,
+#                            no Discord. Its own state (staging/terraform.tfstate).
+#   bin/server stop staging  delete the staging VPS (nothing is backed up)
 #   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
 #   bin/server vault         copy the backups into the locked vault bucket now
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
@@ -42,6 +46,16 @@ cd "$ROOT"
 . "$ROOT/scripts/lib.sh"
 
 HOST=${TS_HOST:-mc-prod}                 # Tailscale name; infra var.server_name
+# Staging (`start staging`, `stop staging`, or STAGING=1 for `tofu`): a second
+# VPS named mc-staging with its own OpenTofu state, for measuring changes
+# (docs/performance.md). It never touches the real world's VPS, DNS or backups.
+if [[ "${1:-}" =~ ^(start|stop)$ && "${2:-}" == staging ]]; then export STAGING=1; fi
+if [[ "${STAGING:-}" == 1 ]]; then
+  HOST=mc-staging
+  export TF_VAR_staging=true TF_VAR_server_name=$HOST
+  # Hetzner refuses a second key with the same public key, so staging has its own.
+  STAGING_KEY=${STAGING_KEY:-${XDG_CACHE_HOME:-$HOME/.cache}/mc-staging/id_ed25519}
+fi
 SSH_USER=${SSH_USER:-deployer}           # infra var.username
 REPO=${REPO:-https://github.com/Qwacktuz/minecraft-docker-smp.git}
 AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
@@ -293,7 +307,8 @@ start_vps() {
   git fetch --quiet "$remote_name"
   [[ -n "$(git branch -r --contains "$sha")" ]] ||
     die "commit ${sha:0:7} is not pushed to '$remote_name'; push it first"
-  git branch -r --contains "$sha" | grep -qx "  $remote_name/main" ||
+  # Staging is there to test commits that aren't on main yet.
+  [[ "${STAGING:-}" == 1 ]] || git branch -r --contains "$sha" | grep -qx "  $remote_name/main" ||
     { say "Commit ${sha:0:7} is not on main (test it with 'bin/server start local')."
       confirm "Run it on the VPS, the real world, anyway?"; }
   # Ignore mode-only changes (this checkout has many 644->755 flips).
@@ -312,30 +327,49 @@ start_vps() {
 
   NOTIFY_FAILURE=start
   say "Creating or updating the VPS..."
+  phase tofu-apply
   apply_vps
 
   say "Waiting for $HOST to join the tailnet..."
+  phase tailnet
+  # Every 2 s, for up to 10 minutes.
   local tries=0
   until remote true 2>/dev/null; do
-    (( ++tries <= 60 )) || die "$HOST did not become reachable over Tailscale SSH"
-    sleep 10
+    (( ++tries <= 300 )) || die "$HOST did not become reachable over Tailscale SSH"
+    sleep 2
   done
   # Separate session: the deploy must log in after cloud-init has added the
   # user to the docker group, or it can't reach the Docker socket.
+  phase cloud-init
   remote "sudo cloud-init status --wait >/dev/null" || die "cloud-init failed on $HOST"
 
   say "Deploying ${sha:0:7}..."
+  phase deploy
+  local backups=1
+  [[ "${STAGING:-}" == 1 ]] && backups=
   # The Age key travels over SSH stdin: never in arguments, env files, or disk.
   # shellcheck disable=SC2016 # expanded on the VPS
   local script='set -eu
 SOPS_AGE_KEY=$(cat); export SOPS_AGE_KEY
 mkdir -p ~/app && cd ~/app
 exec 9>~/.minecraft-deploy.lock; flock -w 1800 9
+t=$(date +%s)
 [ -d .git ] || git clone -q "$REPO" .
 git fetch -q origin "$SHA" && git reset -q --hard "$SHA"
-APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
-  remote "$(printf 'REPO=%q SHA=%q RESTORE=%q bash -c %q' "$REPO" "$sha" "$restore" "$script")" \
-    < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
+echo "--- clone $(($(date +%s) - t))s"
+APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS="$BACKUPS" bash scripts/deploy.sh'
+  local out
+  out=$(mktemp)
+  remote "$(printf 'REPO=%q SHA=%q RESTORE=%q BACKUPS=%q bash -c %q' "$REPO" "$sha" "$restore" "$backups" "$script")" \
+    < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE") | tee "$out"
+  phase
+  phase_lines < "$out"
+  rm -f "$out"
+  if [[ "${STAGING:-}" == 1 ]]; then
+    say "Staging runs on $HOST ($(tf output -raw ipv4_address)); 'bin/server stop staging' deletes it."
+    NOTIFY_FAILURE=
+    return
+  fi
 
   # The backup list, whitelist and hardware for the web app (web/); never
   # blocks the start. The type and location come from the state, so they are
@@ -348,8 +382,10 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
   if [[ "$type" =~ ^[a-z0-9]+$ && "$location" =~ ^[a-z0-9-]+$ && "$ipv4" =~ ^[0-9.]+$ ]]; then
     web_env="SERVER_TYPE=$type SERVER_LOCATION=$location SERVER_IPV4=$ipv4 "
   fi
+  phase publish-status
   on vps "${web_env}bash scripts/publish-status.sh" ||
     echo "warning: could not publish the status for the web app" >&2
+  phase
   say "Running on the VPS: mc.cactuz.dev ($ipv4)"
   NOTIFY_FAILURE=
   notify "🟢 The server is up: \`mc.cactuz.dev\`${type:+ ($(tr '[:lower:]' '[:upper:]' <<< "$type") in $location)} ($(run_origin))"
@@ -392,10 +428,15 @@ stop() {
       ;;
     local) local_running || { say "No local copy is running."; return; } ;;
     vps) vps_exists || { say "No VPS is running."; return; } ;;
+    staging) vps_exists || { say "No staging VPS is running."; return; } ;;
     *) usage 1 >&2 ;;
   esac
   if [[ "$where" == none ]]; then say "Nothing is running."; return; fi
 
+  if [[ "${STAGING:-}" == 1 ]]; then
+    stop_staging
+    return
+  fi
   if [[ "$where" == local ]]; then
     say "Stopping the local copy (nothing is saved to R2)..."
     on local "docker compose down"
@@ -410,27 +451,35 @@ stop() {
     say "The last prune is more than $AUTO_PRUNE_DAYS days old; pruning first."
     prune_vps
   fi
+  phase backup
   verified_backup "Server shutting down for a final backup..."
   # The VPS disk holds the only other copy of the world: never delete it when
   # the backups look damaged.
   say "Checking the backups' integrity (reading 2% of the data)..."
+  phase check
   local check
   check=$(on vps "docker compose exec -T backup restic --retry-lock 2m check --read-data-subset 2%" 2>&1) ||
     { tail -n 20 <<< "$check" >&2; die "the backups failed their integrity check; the server is still running"; }
   say "Stopping containers..."
+  phase down
   on vps "docker compose down"
   # A public download of the world (no player data); never blocks the stop.
+  phase world-zip
   on vps "bash scripts/publish-world.sh" ||
     echo "warning: could not publish world.zip; the backup in R2 is safe" >&2
+  phase publish-status
   on vps "bash scripts/publish-status.sh" ||
     echo "warning: could not publish backups.json for the web app" >&2
   # The web map (BlueMap's tiles), also public and also never blocking.
+  phase map
   on vps "bash scripts/publish-map.sh" ||
     echo "warning: could not publish the map; the next VPS renders the changes again" >&2
 
   say "Deleting the VPS..."
+  phase destroy
   remote "sudo tailscale logout" 2>/dev/null || true
   tf destroy -input=false -auto-approve
+  phase
   # Free the name so the next VPS joins as '$HOST', not '$HOST-1'.
   secrets infra _forget-device "$HOST" ||
     echo "warning: could not remove $HOST from the tailnet; delete it in the Tailscale admin console" >&2
@@ -496,11 +545,48 @@ web_deploy() {
   printf '%s' "$WEB_GITHUB_TOKEN" | wrangler secret put GITHUB_TOKEN
 }
 
+# --- Staging (docs/performance.md) ---------------------------------------------
+
+# A throwaway VPS from the newest backup, for measuring starts and stops. Read
+# only toward R2 (deploy.sh with BACKUPS='' restores with --no-lock), no DNS, no
+# publishing, no Discord. Every Hetzner resource is labelled purpose=perf-staging.
+start_staging() {
+  need ssh-keygen
+  if [[ ! -f "$STAGING_KEY.pub" ]]; then
+    mkdir -p "$(dirname "$STAGING_KEY")"
+    ssh-keygen -q -t ed25519 -N '' -C mc-staging -f "$STAGING_KEY"
+  fi
+  TF_VAR_staging_ssh_public_key=$(cat "$STAGING_KEY.pub")
+  export TF_VAR_staging_ssh_public_key
+  start_vps
+}
+# Nothing on the staging disk is kept: stop the game, then delete the VPS.
+stop_staging() {
+  phase down
+  on vps "docker compose down" || echo "warning: could not stop the containers on $HOST" >&2
+  phase destroy
+  remote "sudo tailscale logout" 2>/dev/null || true
+  # destroy needs the variable, not the key's value.
+  TF_VAR_staging_ssh_public_key=${TF_VAR_staging_ssh_public_key:-unused} \
+    tf destroy -input=false -auto-approve
+  phase
+  say "Staging deleted."
+}
+
+# Reads command output on stdin and records its "--- <name> <seconds>s" lines
+# (deploy.sh's phases on the VPS) in PHASE_LOG and GitHub's step summary.
+phase_lines() {
+  local name seconds
+  while read -r name seconds; do phase_done "$name" "${seconds%s}" >/dev/null; done < <(
+    sed -nE 's/^--- ([a-z0-9-]+) ([0-9]+)s$/\1 \2/p')
+}
+
 # --- Discord -------------------------------------------------------------------
 
 # Posts a message to Discord when DISCORD_WEBHOOK_URL is set in
 # secrets/infra.enc.env. A failed post only warns.
 notify() {
+  [[ "${STAGING:-}" == 1 ]] && return 0  # staging stays silent
   secrets infra _notify "$1" || echo "warning: could not post to Discord" >&2
 }
 
@@ -799,13 +885,26 @@ usage() { awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0";
 # Runs tofu init with the state bucket from the decrypted infra secrets.
 # shellcheck disable=SC2154 # TOFU_BACKEND_* come from secrets/infra.enc.env
 tofu_init() {
-  tofu -chdir="$ROOT/infra" init -input=false -reconfigure \
+  tofu -chdir="$ROOT/infra" init -input=false -reconfigure -backend-config="key=$(state_key)" \
     -backend-config="bucket=${TOFU_BACKEND_BUCKET:-}" -backend-config="endpoint=${TOFU_BACKEND_ENDPOINT:-}"
+}
+# The state of the real VPS, or the staging one's.
+state_key() { if [[ "${STAGING:-}" == 1 ]]; then echo staging/terraform.tfstate; else echo prod/terraform.tfstate; fi; }
+# Refuses every tofu command unless infra/ was initialised with this mode's
+# state, and staging only ever runs as mc-staging: a staging run can't reach the
+# real VPS's state, and the other way round.
+backend_guard() {
+  if [[ "${STAGING:-}" == 1 && ( "${TF_VAR_server_name:-}" != mc-staging || "${TF_VAR_staging:-}" != true ) ]]; then
+    die "staging must run as mc-staging with staging=true; refusing to run OpenTofu"
+  fi
+  grep -Eq "\"key\": *\"$(state_key)\"" "$ROOT/infra/.terraform/terraform.tfstate" 2>/dev/null ||
+    die "OpenTofu is not initialised with $(state_key); refusing to run it"
 }
 
 case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
+  "start staging") start_staging ;;
   "stop "*) stop "${2:-}" ;;
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
@@ -821,7 +920,7 @@ case "${1:-} ${2:-}" in
   "unpin "*) shift; unpin_args "$@" ;;
   "-h "* | "--help "* | "help "*) usage ;;
   # Hidden commands: `secrets` runs these with the decrypted values in the environment.
-  "_tofu "*) shift; tofu -chdir="$ROOT/infra" "$@" ;;
+  "_tofu "*) shift; backend_guard; tofu -chdir="$ROOT/infra" "$@" ;;
   "_tofu-init "*) tofu_init ;;
   "_vault-copy "*) vault_copy ;;
   "_pause-alerts "*) pause_alerts ;;

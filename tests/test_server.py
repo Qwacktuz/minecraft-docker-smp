@@ -22,7 +22,9 @@ args = sys.argv[1:]
 flag = lambda key: os.environ.get(key) == "1"
 stdin = "" if sys.stdin.isatty() else sys.stdin.read()
 with open(os.environ["MOCK_LOG"], "a") as log:
-    log.write(json.dumps({"argv": [name, *args], "stdin": stdin}) + "\n")
+    log.write(json.dumps({"argv": [name, *args], "stdin": stdin,
+                          "tf_vars": {k[7:]: v for k, v in os.environ.items() if k.startswith("TF_VAR_")
+                                      and k[7:] in ("staging", "server_name", "staging_ssh_public_key")}}) + "\n")
 command = " ".join(args)
 
 def snapshots():
@@ -47,12 +49,21 @@ if name == "sops" and args[:1] == ["exec-env"]:
                        RESTIC_PASSWORD="restic-secret")
     else:
         secrets.update(VAULT_ACCESS_KEY_ID="vault-id", VAULT_SECRET_ACCESS_KEY="vault-secret")
+        if os.environ.get("SECRET_SERVER_NAME"):  # a secrets file that sets the name
+            secrets["TF_VAR_server_name"] = os.environ["SECRET_SERVER_NAME"]
         if os.environ.get("DISCORD"):
             secrets["DISCORD_WEBHOOK_URL"] = "https://discord.com/api/webhooks/123/webhook-token"
     sys.exit(subprocess.call(["sh", "-c", args[2]], env=dict(os.environ, **secrets)))
 if name == "tofu":
     if "TF_VAR_hcloud_token" not in os.environ:
         sys.exit("tofu ran without the decrypted infra secrets")
+    if "init" in args:  # like tofu: remember the backend's state key in .terraform/
+        chdir = next(a.split("=", 1)[1] for a in args if a.startswith("-chdir="))
+        key = next((a.split("=", 2)[2] for a in args if a.startswith("-backend-config=key=")),
+                   "prod/terraform.tfstate")
+        Path(chdir, ".terraform").mkdir(exist_ok=True)
+        Path(chdir, ".terraform/terraform.tfstate").write_text(
+            json.dumps({"backend": {"type": "s3", "config": {"key": key}}}, indent=4))
     if "state" in args and os.environ.get("STATE") == "missing":
         sys.exit("Error: No state file was found")
     if "state" in args and os.environ.get("STATE") == "broken":
@@ -101,6 +112,8 @@ elif name == "ssh":
     if "restic" in command and " check " in command and flag("CHECK_FAIL"):
         print("Fatal: repository contains errors")
         sys.exit(1)
+    if "scripts/deploy.sh" in command:  # its phase lines, as deploy.sh prints them
+        print("--- restic-restore 12s")
     if "publish-world.sh" in command and flag("PUBLISH_FAIL"):
         sys.exit(1)
     if "publish-map.sh" in command and flag("MAP_FAIL"):
@@ -161,8 +174,11 @@ class ServerTests(unittest.TestCase):
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
         for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "SERVER_LOCATIONS", "GITHUB_RUN_ID", "GITHUB_REPOSITORY", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
-                         "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT"):
+                         "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT", "STAGING", "PHASE_LOG",
+                         "GITHUB_STEP_SUMMARY", "TF_VAR_staging", "TF_VAR_server_name",
+                         "TF_VAR_staging_ssh_public_key"):
             env.pop(variable, None)
+        env["STAGING_KEY"] = str(root / "staging-key/id_ed25519")
         env.update({key: value for key, value in flags.items()})
         result = subprocess.run(["bash", str(root / "bin/server"), *argv], env=env,
                                 capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -572,6 +588,93 @@ class ServerTests(unittest.TestCase):
             if call["argv"][0] == "sops":
                 self.assertEqual(call["argv"][1:3], ["exec-env", call["argv"][2]])
                 self.assertTrue(call["argv"][2].endswith("secrets/infra.enc.env"))
+
+    # --- Staging and phase timings (docs/performance.md) ---------------------
+
+    def test_start_staging_is_its_own_read_only_silent_vps(self):
+        result, calls = self.run_server("start", "staging", DISCORD="1", NOT_MAIN="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        init = next(c["argv"] for c in calls if c["argv"][0] == "tofu" and "init" in c["argv"])
+        self.assertIn("-backend-config=key=staging/terraform.tfstate", init)
+        apply = calls[self.find(calls, "apply")[0]]
+        self.assertEqual(apply["tf_vars"]["staging"], "true")
+        self.assertEqual(apply["tf_vars"]["server_name"], "mc-staging")
+        self.assertTrue(apply["tf_vars"]["staging_ssh_public_key"].startswith("ssh-ed25519 "))
+        deploy = " ".join(calls[self.find(calls, "scripts/deploy.sh")[0]]["argv"])
+        self.assertIn("deployer@mc-staging", deploy)
+        self.assertIn("BACKUPS=''", deploy)  # read-only toward R2
+        self.assertIn("RESTORE=latest", deploy)
+        for text in ("publish-status.sh", "publish-world.sh", "BACKUPS=1"):
+            self.assertFalse(self.find(calls, text), text)
+        self.assertEqual(self.discord_posts(calls), [])
+        self.assertNotIn("Run it on the VPS", result.stdout)  # no main check
+        for call in calls:
+            if call["argv"][0] == "ssh":
+                self.assertIn("deployer@mc-staging", call["argv"])
+
+    def test_stop_staging_deletes_it_without_backups(self):
+        result, calls = self.run_server("stop", "staging", VPS="1", DISCORD="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        down = self.find(calls, "compose down")[0]
+        destroy = self.find(calls, "destroy")[0]
+        self.assertLess(down, destroy)
+        self.assertEqual(calls[destroy]["tf_vars"]["server_name"], "mc-staging")
+        for text in ("backup now", "check", "publish-", "_forget-device", "_pause-alerts",
+                     "_vault-copy", "rclone"):
+            self.assertFalse(self.find(calls, text), text)
+        self.assertEqual(self.discord_posts(calls), [])
+
+    def test_tofu_refuses_a_state_that_does_not_match_the_mode(self):
+        # The real VPS's state is initialised with its key explicitly.
+        _, calls = self.run_server("tofu", "plan")
+        init = next(c["argv"] for c in calls if c["argv"][0] == "tofu" and "init" in c["argv"])
+        self.assertIn("-backend-config=key=prod/terraform.tfstate", init)
+        # Staging only runs as mc-staging, even if a secrets file sets another name.
+        result, calls = self.run_server("tofu", "plan", STAGING="1", SECRET_SERVER_NAME="mc-prod")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        plan = calls[self.find(calls, "plan")[0]]
+        self.assertEqual(plan["tf_vars"]["server_name"], "mc-staging")
+        self.assertEqual(plan["tf_vars"]["staging"], "true")
+        result, calls = self.run_server("tofu", "state", "list", STAGING="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_backend_guard_refuses_the_wrong_state(self):
+        # A .terraform/ left initialised with the other state is refused.
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        infra = Path(temp.name, "infra/.terraform")
+        infra.mkdir(parents=True)
+        (infra / "terraform.tfstate").write_text('{"backend": {"config": {"key": "prod/terraform.tfstate"}}}')
+        shutil.copytree(SERVER.parents[1] / "scripts", Path(temp.name, "scripts"))
+        Path(temp.name, "bin").mkdir()
+        shutil.copy(SERVER, Path(temp.name, "bin/server"))
+        env = dict(os.environ, STAGING="1", TF_VAR_server_name="mc-staging", TF_VAR_staging="true")
+        result = subprocess.run(["bash", str(Path(temp.name, "bin/server")), "_tofu", "plan"],
+                                env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not initialised with staging/terraform.tfstate", result.stderr)
+
+    def test_start_and_stop_record_their_phases(self):
+        timings = Path(tempfile.mkdtemp()) / "timings"
+        self.addCleanup(shutil.rmtree, timings.parent)
+        result, _ = self.run_server("start", "vps", PHASE_LOG=str(timings))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names = [line.split()[0] for line in timings.read_text().splitlines()]
+        for name in ("tofu-apply", "tailnet", "cloud-init", "deploy", "restic-restore", "publish-status"):
+            self.assertIn(name, names)
+        self.assertIn("restic-restore 12", timings.read_text().splitlines())
+        timings.unlink()
+        result, _ = self.run_server("stop", VPS="1", PHASE_LOG=str(timings))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names = [line.split()[0] for line in timings.read_text().splitlines()]
+        self.assertEqual(names, ["backup", "check", "down", "world-zip", "publish-status", "map", "destroy"])
+
+    def test_phases_go_to_the_github_step_summary(self):
+        summary = Path(tempfile.mkdtemp()) / "summary"
+        self.addCleanup(shutil.rmtree, summary.parent)
+        result, _ = self.run_server("stop", VPS="1", GITHUB_STEP_SUMMARY=str(summary))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(summary.read_text(), r"(?m)^\| backup \| \d+s \|$")
 
     def test_unknown_command_shows_usage(self):
         result, _ = self.run_server("launch")

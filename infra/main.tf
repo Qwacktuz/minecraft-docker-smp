@@ -1,6 +1,22 @@
+# Staging (bin/server start staging) has its own key: Hetzner refuses a second
+# key with the same public key while the real VPS's exists.
 resource "hcloud_ssh_key" "deploy_key" {
-  name       = "github-actions-deploy-key"
-  public_key = var.ssh_public_key
+  name       = var.staging ? "${var.server_name}-key" : "github-actions-deploy-key"
+  public_key = var.staging ? var.staging_ssh_public_key : var.ssh_public_key
+  labels     = local.labels
+
+  lifecycle {
+    precondition {
+      condition     = !var.staging || var.staging_ssh_public_key != ""
+      error_message = "Staging needs staging_ssh_public_key (bin/server start staging creates one)."
+    }
+  }
+}
+
+locals {
+  # Every staging resource carries purpose=perf-staging, so a sweep can find
+  # anything left behind. The real VPS's resources have no labels.
+  labels = var.staging ? { purpose = "perf-staging" } : {}
 }
 
 # Single-use bootstrap key. Ephemeral: the device disappears once a deleted VPS
@@ -33,7 +49,8 @@ data "cloudinit_config" "minecraft_cfg" {
 
 # Only the game is public. SSH is reachable over Tailscale only.
 resource "hcloud_firewall" "minecraft_fw" {
-  name = "minecraft-firewall"
+  name   = var.staging ? "${var.server_name}-firewall" : "minecraft-firewall"
+  labels = local.labels
 
   rule {
     description = "Minecraft"
@@ -67,6 +84,7 @@ resource "hcloud_server" "minecraft" {
   location     = var.server_location
   firewall_ids = [hcloud_firewall.minecraft_fw.id]
   ssh_keys     = [hcloud_ssh_key.deploy_key.id]
+  labels       = local.labels
 
   user_data = data.cloudinit_config.minecraft_cfg.rendered
 
