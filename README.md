@@ -12,11 +12,18 @@ One command, run from your laptop, decides where the world runs:
 server start vps         # create the Hetzner VPS and run there: mc.cactuz.dev
 server start local       # a read-only copy on this machine: localhost:25565
 server stop              # VPS: final backup to R2, shut down, delete the VPS
+server stop local        # only the local copy (needed when the VPS runs too)
 server status            # where is it running, and when was the last backup?
 server prune --dry-run   # which unused chunks would pruning delete?
 server prune             # back up, then delete unused chunks on the VPS
 server tofu plan         # run OpenTofu by hand with the encrypted credentials
 ```
+
+**Testing beside the live server:** `server start local` works while the VPS
+runs. It restores the VPS's newest backup and runs this checkout (e.g. `dev`),
+so you can try mods or config offline while players stay on `main`. Nothing
+done locally reaches R2. `server start vps` from the laptop asks first when
+HEAD isn't on `main`; the GitHub "Run workflow" button always deploys `main`.
 
 Backups, from the laptop with no VPS needed (read-only):
 

@@ -98,7 +98,7 @@ elif name == "git":
     if args[:1] == ["remote"]:
         print("github")
     if "--contains" in args and not flag("UNPUSHED"):
-        print("  github/main")
+        print("  github/dev" if flag("NOT_MAIN") else "  github/main")
 '''
 
 
@@ -364,13 +364,34 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Nothing is running", result.stdout)
         self.assertFalse(self.find(calls, "backup now"))
 
-    def test_only_one_location_runs_the_world(self):
-        result, calls = self.run_server("start", "vps", LOCAL="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(self.find(calls, "apply"))
+    def test_a_local_test_copy_runs_beside_the_vps(self):
         result, calls = self.run_server("start", "local", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("BACKUPS=1", " ".join(calls[self.find(calls, "deploy.sh")[0]]["argv"]))
+        self.assertIn("The VPS keeps running", result.stdout)
+        result, calls = self.run_server("start", "vps", LOCAL="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.find(calls, "apply"))
+
+    def test_stop_with_both_running_needs_a_target(self):
+        result, calls = self.run_server("stop", VPS="1", LOCAL="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(self.find(calls, "deploy.sh"))
+        self.assertIn("stop local", result.stderr)
+        self.assertFalse(self.find(calls, "compose down"))
+        result, calls = self.run_server("stop", "local", VPS="1", LOCAL="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.find(calls, "compose down"))
+        self.assertFalse(self.find(calls, "backup now"))
+        self.assertFalse(self.find(calls, "destroy"))
+        result, calls = self.run_server("stop", "vps", VPS="1", LOCAL="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.find(calls, "destroy"))
+
+    def test_start_vps_asks_before_running_a_commit_not_on_main(self):
+        result, calls = self.run_server("start", "vps", NOT_MAIN="1")
+        self.assertIn("not on main", result.stdout + result.stderr)
+        self.assertIn("Aborted", result.stdout)
+        self.assertFalse(self.find(calls, "apply"))
 
     def test_start_vps_requires_pushed_commit(self):
         result, calls = self.run_server("start", "vps", UNPUSHED="1")

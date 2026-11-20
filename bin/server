@@ -3,8 +3,11 @@
 # Actions (.github/workflows/server.yml: start/stop buttons and the idle auto-stop).
 #
 #   bin/server start vps     create the Hetzner VPS and run the world there
-#   bin/server start local   run a read-only copy of the world on this machine
-#   bin/server stop          shut down; on the VPS: final backup, delete the VPS
+#                            (from the laptop: asks first if HEAD is not on main)
+#   bin/server start local   run a read-only copy of the world on this machine,
+#                            also while the VPS runs (a test copy of this checkout)
+#   bin/server stop [local|vps]  shut down; on the VPS: final backup, delete the
+#                            VPS. With both running, name which one.
 #   bin/server status        where is the world running?
 #   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
 #   bin/server vault         copy the backups into the locked vault bucket now
@@ -115,9 +118,10 @@ on() {
   local where=$1; shift
   if [[ "$where" == local ]]; then bash -c "$*"; else remote "cd ~/app && $*"; fi
 }
+# The VPS holds the real world, so it wins when a local test copy runs too.
 where_running() {
-  if local_running; then echo local
-  elif vps_exists; then echo vps
+  if vps_exists; then echo vps
+  elif local_running; then echo local
   else echo none
   fi
 }
@@ -253,7 +257,7 @@ start_local() {
       restore=
     fi
   elif vps_exists; then
-    die "the world is running on the VPS; run 'bin/server stop' first"
+    say "The VPS keeps running; this test copy starts from its newest backup."
   fi
   SOPS_AGE_KEY_FILE="$AGE_KEY_FILE" APP_DIR="$ROOT" RESTORE="$restore" BACKUPS='' \
     bash scripts/deploy.sh
@@ -266,8 +270,6 @@ start_local() {
 start_vps() {
   need tofu git ssh
   [[ -f "$AGE_KEY_FILE" ]] || die "Age key not found at $AGE_KEY_FILE"
-  local_running && die "the world is running locally; run 'bin/server stop' first"
-
   # The VPS deploys a commit from GitHub, so it must be pushed.
   local sha remote_name
   sha=$(git rev-parse HEAD)
@@ -275,6 +277,9 @@ start_vps() {
   git fetch --quiet "$remote_name"
   [[ -n "$(git branch -r --contains "$sha")" ]] ||
     die "commit ${sha:0:7} is not pushed to '$remote_name'; push it first"
+  git branch -r --contains "$sha" | grep -qx "  $remote_name/main" ||
+    { say "Commit ${sha:0:7} is not on main (test it with 'bin/server start local')."
+      confirm "Run it on the VPS, the real world, anyway?"; }
   # Ignore mode-only changes (this checkout has many 644->755 flips).
   [[ -z "$(git -c core.fileMode=false status --porcelain --untracked-files=no)" ]] ||
     echo "warning: uncommitted changes are not deployed; the VPS runs ${sha:0:7}" >&2
@@ -320,8 +325,17 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
 
 stop() {
   need tofu
-  local where
-  where=$(where_running)
+  local where=${1:-}
+  case "$where" in
+    "")
+      where=$(where_running)
+      [[ "$where" == vps ]] && local_running &&
+        die "both the VPS and a local copy run; use 'bin/server stop local' or 'bin/server stop vps'"
+      ;;
+    local) local_running || { say "No local copy is running."; return; } ;;
+    vps) vps_exists || { say "No VPS is running."; return; } ;;
+    *) usage 1 >&2 ;;
+  esac
   if [[ "$where" == none ]]; then say "Nothing is running."; return; fi
 
   if [[ "$where" == local ]]; then
@@ -366,7 +380,7 @@ stop() {
 # Runs under `secrets all`: WATCHDOG_CLOUDFLARE_TOKEN (Workers Scripts and KV
 # Edit) deploys it, WATCHDOG_GITHUB_TOKEN (Actions: read and write on this
 # repository only) becomes its one secret, and the account ID comes from R2_ENDPOINT.
-# shellcheck disable=SC2154 # R2_ENDPOINT and WATCHDOG_* come from sops exec-env
+# shellcheck disable=SC2154,SC2031 # R2_ENDPOINT and WATCHDOG_* come from sops exec-env
 watchdog_deploy() {
   need wrangler
   [[ -n "${WATCHDOG_CLOUDFLARE_TOKEN:-}" && -n "${WATCHDOG_GITHUB_TOKEN:-}" ]] ||
@@ -409,7 +423,8 @@ status() {
   case "$where" in
     none) say "Stopped (the world is in R2)."; return ;;
     local) say "Running locally (a read-only copy; nothing is saved to R2)."; return ;;
-    vps) say "Running on the VPS ($HOST)." ;;
+    vps) say "Running on the VPS ($HOST)."
+         local_running && say "A local test copy runs too (read-only; nothing is saved to R2)." ;;
   esac
   local latest
   if latest=$(vps_restic snapshots --latest 1 --json | snapshot_list | head -n1); then
@@ -640,7 +655,8 @@ unpin_args() {
   unpin "$id"
 }
 
-usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+# Prints the header comment (line 2 up to the first line that isn't a comment).
+usage() { awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0"; exit "${1:-0}"; }
 
 # Runs tofu init with the state bucket from the decrypted infra secrets.
 # shellcheck disable=SC2154 # TOFU_BACKEND_* come from secrets/infra.enc.env
@@ -652,7 +668,7 @@ tofu_init() {
 case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
-  "stop "*) stop ;;
+  "stop "*) stop "${2:-}" ;;
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
   "vault "*) vault ;;
