@@ -1,6 +1,7 @@
 # Infrastructure
 
-OpenTofu provisions a Hetzner VPS (default `cx33`, `hel1`, Debian 13), firewall,
+OpenTofu provisions a Hetzner VPS (Debian 13 in `hel1`; a `cx33`, or a `cpx32`
+when Hetzner has no `cx33` left: `SERVER_TYPES` in `bin/server`), firewall,
 DNS records, and a Tailscale bootstrap key. Cloud-init installs Docker, SOPS,
 Tailscale, UFW, and other host packages.
 

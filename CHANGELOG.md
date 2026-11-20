@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: fall back to another server type when Hetzner is sold out (2026-11-20)
+
+- Hetzner had no `cx33` left in any location, so `start` failed with
+  `resource_unavailable`. `bin/server start` now tries the types in
+  `SERVER_TYPES` in order (default `cx33 cpx32`) and moves on only on that
+  error; any other OpenTofu error still stops at once.
+- `infra/main.tf` ignores `server_type` changes, so a running VPS is never
+  resized or replaced because a cheaper type is available again. The next VPS
+  gets the cheaper one.
+
 ## Unreleased: player names on the web page (2026-11-20)
 
 - The public page lists who's online, with skin heads (mc-heads.net), from the

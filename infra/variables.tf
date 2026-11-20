@@ -67,7 +67,7 @@ variable "server_name" {
 }
 
 variable "server_type" {
-  description = "Instance type"
+  description = "Instance type for a new VPS; bin/server passes it from SERVER_TYPES"
   type        = string
   default     = "cx33" # AMD64, 4 vCPU, 8GB RAM
 }

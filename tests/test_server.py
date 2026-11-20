@@ -59,6 +59,15 @@ if name == "tofu":
         print("hcloud_server.minecraft")
     if "output" in args:
         print("192.0.2.1")
+    if "apply" in args:
+        # SOLD_OUT="cx33 ...": Hetzner can't place these types. APPLY_FAIL: any other error.
+        server_type = next((a.split("=", 1)[1] for a in args if a.startswith("server_type=")), "")
+        if server_type in os.environ.get("SOLD_OUT", "").split():
+            print("Error: error during placement (resource_unavailable, d3eda57e)", file=sys.stderr)
+            sys.exit(1)
+        if flag("APPLY_FAIL"):
+            print("Error: invalid token", file=sys.stderr)
+            sys.exit(1)
 elif name == "docker":
     if "--entrypoint" in args:  # lib.sh restic(): record where it reads from
         with open(os.environ["MOCK_LOG"] + ".repos", "a") as repos:
@@ -147,7 +156,7 @@ class ServerTests(unittest.TestCase):
         log.touch()
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
-        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
+        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
                          "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT"):
             env.pop(variable, None)
         env.update({key: value for key, value in flags.items()})
@@ -413,6 +422,40 @@ class ServerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not pushed", result.stderr)
         self.assertFalse(self.find(calls, "apply"))
+
+    def applies(self, calls):
+        return [c["argv"] for c in calls if c["argv"][0] == "tofu" and "apply" in c["argv"]]
+
+    def test_start_vps_tries_the_first_server_type(self):
+        result, calls = self.run_server("start", "vps")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([a[-1] for a in self.applies(calls)], ["server_type=cx33"])
+
+    def test_start_vps_falls_back_when_hetzner_has_no_capacity(self):
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([a[-1] for a in self.applies(calls)], ["server_type=cx33", "server_type=cpx32"])
+        self.assertIn("no cx33 servers available", result.stdout)
+        self.assertTrue(self.find(calls, "scripts/deploy.sh"))
+
+    def test_start_vps_stops_when_every_type_is_sold_out(self):
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cpx32")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("none of these server types", result.stderr)
+        self.assertEqual(len(self.applies(calls)), 2)
+        self.assertFalse(self.find(calls, "scripts/deploy.sh"))
+
+    def test_start_vps_does_not_retry_other_apply_errors(self):
+        result, calls = self.run_server("start", "vps", APPLY_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("tofu apply failed", result.stderr)
+        self.assertEqual(len(self.applies(calls)), 1)
+        self.assertFalse(self.find(calls, "scripts/deploy.sh"))
+
+    def test_server_types_can_be_overridden(self):
+        result, calls = self.run_server("start", "vps", SERVER_TYPES="cax21")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([a[-1] for a in self.applies(calls)], ["server_type=cax21"])
 
     def test_start_vps_sends_age_key_only_on_stdin(self):
         result, calls = self.run_server("start", "vps")

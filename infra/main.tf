@@ -79,6 +79,8 @@ resource "hcloud_server" "minecraft" {
     # bin/server stop deletes the server on purpose, after a verified backup.
     prevent_destroy = false
     # Cloud-init changes apply to the next VPS, never by replacing a running one.
-    ignore_changes = [user_data]
+    # So does the type: bin/server falls back to another type when Hetzner has
+    # none of the first (SERVER_TYPES), and a running VPS must never be resized.
+    ignore_changes = [user_data, server_type]
   }
 }
