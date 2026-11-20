@@ -17,3 +17,7 @@ This README is copied too, as `config/README.md` in the world; it's harmless.
 
 | File | Mod | What is set |
 |---|---|---|
+| `bluemap/core.conf`, `bluemap/webapp.conf`, `bluemap/webserver.conf` | BlueMap | download accepted, 1 render thread, own web server off, browser-side decompression ([docs/map.md](../docs/map.md)) |
+| `ledger.toml` | Ledger | logs older than 90 days are purged (`autoPurgeDays`) |
+| `meowantixray.yml` | Meow Anti-Xray | engine mode 1, Nether hidden up to y=128, End off |
+| `servercore/config.yml` | ServerCore | dynamic distances on: while ticks average over 35 ms, simulation distance drops 10→6, then view distance 12→8; mob caps stay vanilla |

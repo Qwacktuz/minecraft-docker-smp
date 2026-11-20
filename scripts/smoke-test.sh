@@ -112,7 +112,7 @@ for check in "${checks[@]}"; do
     host) bash -c "$body" || { echo "FAILED" >&2; failed=1; } ;;
     log)
       compose logs --no-color --no-log-prefix minecraft-service > "$log" 2>&1 || true
-      grep -Em3 "$body" "$log" || { echo "FAILED: no log line matches" >&2; failed=1; } ;;
+      grep -Em3 -e "$body" "$log" || { echo "FAILED: no log line matches" >&2; failed=1; } ;;
   esac
 done
 

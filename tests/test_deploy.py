@@ -25,6 +25,8 @@ if name == "sops":
         print("DUMMY=fixture")
         print("R2_ENDPOINT=https://r2.invalid\nR2_BUCKET_NAME=b\nRESTIC_PASSWORD=p")
         print("R2_ACCESS_KEY_ID=k\nR2_SECRET_ACCESS_KEY=s")
+        if os.environ.get("MOCK_PUBLIC"):
+            print("PUBLIC_WORLD_BUCKET=pub")
     sys.exit(1 if stage == "decrypt" else 0)
 if name == "docker":
     if "--env-file" in args:
@@ -36,6 +38,11 @@ if name == "docker":
     if "--entrypoint" in args and os.environ.get("REPO_LOG"):
         with open(os.environ["REPO_LOG"], "a") as seen:
             seen.write(f"{os.environ['RESTIC_REPOSITORY']} {os.environ['AWS_ACCESS_KEY_ID']}\n")
+    if stage == "map-pull" and "r2:pub/map" in args:
+        sys.exit(1)
+    if "r2:pub/map" in args and os.environ.get("RCLONE_LOG"):
+        with open(os.environ["RCLONE_LOG"], "a") as seen:
+            seen.write(f"{os.environ['RCLONE_CONFIG_R2_ACCESS_KEY_ID']} {os.environ['RCLONE_CONFIG_R2_ENDPOINT']}\n")
     if "restore" in args:  # restic restore writes the world into data/minecraft
         Path("data/minecraft/world").mkdir(parents=True, exist_ok=True)
         Path("data/minecraft/world/level.dat").touch()
@@ -68,7 +75,7 @@ class DeployTests(unittest.TestCase):
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log),
                    PATH=f"{binary}:{os.environ['PATH']}", **extra)
-        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE"):
+        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE", "MOCK_PUBLIC", "RCLONE_LOG"):
             if key not in extra:
                 env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
@@ -109,6 +116,32 @@ class DeployTests(unittest.TestCase):
         for call in calls:  # secrets are passed by name, never as values
             self.assertNotIn("RESTIC_PASSWORD=p", call)
             self.assertFalse(any(arg.endswith("=s") for arg in call))
+
+    def test_restore_pulls_the_published_map_before_up(self):
+        keys = Path(tempfile.mkdtemp()) / "keys"
+        self.addCleanup(shutil.rmtree, keys.parent)
+        _, result, calls = self.run_deploy(RESTORE="latest", MOCK_PUBLIC="1", RCLONE_LOG=str(keys))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        index = lambda match: next(i for i, call in enumerate(calls) if match(call))
+        pull = index(lambda call: "r2:pub/map" in call)
+        self.assertLess(index(lambda call: "restore" in call and "latest" in call), pull)
+        self.assertLess(pull, index(lambda call: "chown" in call))
+        self.assertLess(pull, index(lambda call: "up" in call))
+        self.assertEqual(calls[pull][calls[pull].index("r2:pub/map") + 1], "/data/bluemap/web")
+        self.assertIn("copy", calls[pull])  # never sync: nothing is deleted
+        self.assertEqual(keys.read_text(), "k https://r2.invalid\n")
+        self.assertFalse(any(arg.endswith("=s") or arg.endswith("=k") for arg in calls[pull]))
+        # No restore (a redeploy) or no public bucket: no pull.
+        _, result, calls = self.run_deploy(MOCK_PUBLIC="1")
+        self.assertFalse(any("r2:pub/map" in call for call in calls))
+        _, result, calls = self.run_deploy(RESTORE="latest")
+        self.assertFalse(any(any(arg.startswith("r2:") for arg in call) for call in calls))
+
+    def test_a_failed_map_pull_only_warns(self):
+        _, result, calls = self.run_deploy("map-pull", RESTORE="latest", MOCK_PUBLIC="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("could not pull the published map", result.stderr)
+        self.assertTrue(any("up" in call for call in calls))
 
     def test_restore_is_read_only_and_limited_to_vps_snapshots(self):
         _, result, calls = self.run_deploy(RESTORE="latest")

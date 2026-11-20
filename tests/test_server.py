@@ -90,6 +90,8 @@ elif name == "ssh":
         sys.exit(1)
     if "publish-world.sh" in command and flag("PUBLISH_FAIL"):
         sys.exit(1)
+    if "publish-map.sh" in command and flag("MAP_FAIL"):
+        sys.exit(1)
     if "scripts/prune.sh" in command and flag("PRUNE_FAIL"):
         sys.exit(1)
 elif name == "git":
@@ -254,6 +256,18 @@ class ServerTests(unittest.TestCase):
         self.assertIn("could not publish world.zip", result.stderr)
         self.assertTrue(self.find(calls, "destroy"))
 
+    def test_stop_publishes_the_map_after_the_world_and_before_destroy(self):
+        result, calls = self.run_server("stop", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        publish = self.find(calls, "publish-map.sh")[0]
+        self.assertLess(self.find(calls, "publish-world.sh")[0], publish)
+        self.assertLess(publish, self.find(calls, "destroy")[0])
+        # A failed map upload only warns; the VPS is still deleted.
+        result, calls = self.run_server("stop", VPS="1", MAP_FAIL="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("could not publish the map", result.stderr)
+        self.assertTrue(self.find(calls, "destroy"))
+
     def test_stop_local_never_backs_up(self):
         result, calls = self.run_server("stop", LOCAL="1")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -262,6 +276,7 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(self.find(calls, "destroy"))
         self.assertFalse(self.find(calls, "ssh"))
         self.assertFalse(self.find(calls, "publish-world"))
+        self.assertFalse(self.find(calls, "publish-map"))
         self.assertIn("nothing is saved to R2", result.stdout)
 
     def test_only_the_vps_deploy_enables_backups(self):

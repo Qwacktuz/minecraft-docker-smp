@@ -369,6 +369,9 @@ stop() {
     echo "warning: could not publish world.zip; the backup in R2 is safe" >&2
   on vps "bash scripts/publish-status.sh" ||
     echo "warning: could not publish backups.json for the web app" >&2
+  # The web map (BlueMap's tiles), also public and also never blocking.
+  on vps "bash scripts/publish-map.sh" ||
+    echo "warning: could not publish the map; the next VPS renders the changes again" >&2
 
   say "Deleting the VPS..."
   remote "sudo tailscale logout" 2>/dev/null || true

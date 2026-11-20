@@ -71,13 +71,30 @@ online, when it will stop itself, and the world download. Admins sign in at
 see the backups. It runs the same GitHub workflow as the button above. Setup and
 local development: [docs/web.md](docs/web.md).
 
+**A web map.** BlueMap renders the world while the VPS runs, and every VPS
+`stop` publishes it as static files to **https://world.cactuz.dev/map/**, so the
+map stays online while the server is off. The next `start vps` pulls it back,
+so only changed chunks are rendered again. Details: [docs/map.md](docs/map.md).
+
+**Grief logs.** [Ledger](https://modrinth.com/mod/ledger) records block changes,
+container use and kills in `world/ledger.sqlite` (in the backups, not in
+`world.zip`) and keeps 90 days (`config/ledger.toml`). Ops look things up and
+roll back in game, e.g. `/lg i` (inspect blocks by clicking), `/lg search
+player:Name range:20 after:2d`, `/lg rollback range:20 before:1h`.
+
+**Anti-xray.** [Meow Anti-Xray](https://modrinth.com/mod/meowanti-xray) sends ores
+that don't touch air as stone (or netherrack), so X-ray clients see nothing
+useful; nothing changes for normal play. Settings: `config/meowantixray.yml`;
+`/antixray status` shows them. (DrexHD's AntiXray is incompatible with Fast
+Noise, `zfastnoise`.)
+
 **Pruning** deletes chunks nobody spent time in, while keeping builds, player
 homes, recent activity and a buffer around them. It can also run automatically
 every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pruning.md).
 
 **A public world download.** Every VPS `stop` also uploads the world as
 **https://world.cactuz.dev/world.zip**, after the final backup and with the game
-stopped. It has no player data (inventories, positions, stats), so anyone can take a
+stopped. It has no player data (inventories, positions, stats) and no Ledger logs, so anyone can take a
 copy to test redstone in singleplayer or on their own server; the zip's README.txt
 explains how. It lives in its own public bucket (`PUBLIC_WORLD_BUCKET` in
 `app.enc.env`), separate from the private backups. If the upload fails, `stop`
@@ -213,6 +230,7 @@ tests use mocks and dummy credentials.
 - `scripts/publish-status.sh`: `backups.json` for the web app.
 - `web/`: the web app (SvelteKit on a Cloudflare Worker), `server web` deploys it.
 - `watchdog/`: the idle auto-stop Worker; `watchdog/src/minecraft.js` is shared with `web/`.
+- `scripts/publish-map.sh`, `config/bluemap/`: the public web map.
 - `scripts/restore.sh` (`world`, `regions`, `rollback`) and
   `scripts/test-backup.sh`: backup tools, run on the app host by hand or by
   `server restore` / `server check`. They share `scripts/lib.sh` (pinned images,

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Zips a world folder for download: world_zip.py <world-dir> <out.zip>
 
-Leaves out player data (players/: inventories, positions, stats, advancements)
-and the session lock. Region files are already compressed, so they are stored.
+Leaves out player data (players/: inventories, positions, stats, advancements),
+Ledger's log of who did what (ledger.sqlite*) and the session lock. Region files are already compressed, so they are stored.
 The zip holds a top-level `world/` folder and a README.txt.
 """
 
@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 SKIP_DIRS = {"players"}
-SKIP_FILES = {"session.lock"}
+SKIP_FILES = {"session.lock", "ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm"}
 
 README = """\
 A copy of the SMP world (Minecraft 26.3, Fabric), made {date} UTC.
