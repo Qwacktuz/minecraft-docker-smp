@@ -106,7 +106,6 @@ services:
         bluemap:SX74rxzP # 5.29-fabric
         vanish:KgeCcJWw # 1.6.16+26.3
         ledger:pxv5cN0d # 1.3.25
-        meowanti-xray:ErSXH1ew # 1.7.0+mc26.3.fabric
         simple-voice-chat:x9jLR94Q # fabric-2.6.27+26.3 [beta]
         webcam-mod:SOF9XznV # fabric-4.4.1-26.3
         appleskin:PHjDtQay # 3.0.10+mc26.3

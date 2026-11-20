@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased: anti-xray removed (2026-11-20)
+
+- **Meow Anti-Xray is removed**: it didn't work properly. `REMOVE_OLD_MODS`
+  deletes the jar at the next start. `config/meowantixray.yml` is gone from
+  Git; the world keeps its copy of the file, which does nothing without the mod.
+
 ## Unreleased: fall back to another server type when Hetzner is sold out (2026-11-20)
 
 - Hetzner had no `cx33` left in any location, so `start` failed with
