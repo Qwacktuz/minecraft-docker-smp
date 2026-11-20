@@ -4,10 +4,13 @@ A SvelteKit app in `web/`, running as a Cloudflare Worker. It doesn't replace
 `bin/server`: it shows what's going on and presses the same buttons.
 
 - **`/`, public:** is the server up, who's online (names and skin heads), how
-  long until the idle auto-stop, how to join, and the `world.zip` download. It reloads the
+  long until the idle auto-stop, what it runs on (e.g. "Hetzner CX33 · 4 vCPU ·
+  8 GB RAM · Helsinki"), how to join, and the `world.zip` download. It reloads the
   numbers every 30 seconds (`/api/status`).
 - **`/admin`, behind Cloudflare Access:** Start/Redeploy and Stop buttons, the
-  Server workflow's recent runs with their steps as they go, and the backup list.
+  Server workflow's recent runs with their steps as they go, the VPS's hardware
+  (type, location, CPU, RAM, the game's heap, disk), the backup list, and the
+  whitelist with ops.
 
 ## How it works
 
@@ -16,7 +19,7 @@ browser ──► smp.cactuz.dev (Worker: web/)
               ├─ DNS + server list ping   watchdog/src/minecraft.js (shared with the watchdog)
               ├─ STATE (Workers KV)        the watchdog's state: up since, last busy
               ├─ GitHub API                dispatch server.yml on main; list runs and steps
-              └─ WEB (R2: mc-smp-web)      backups.json, written by the VPS
+              └─ WEB (R2: mc-smp-web)      backups.json, players.json, vps.json, written by the VPS
 ```
 
 - **Start and Stop** start the GitHub "Server" workflow on `main`, exactly like
@@ -27,6 +30,14 @@ browser ──► smp.cactuz.dev (Worker: web/)
   and uploads `backups.json` to the `WEB_BUCKET`. `bin/server` calls it after
   every start and after the final backup on stop. Hourly backups in between show
   up at the next start or stop.
+- **The whitelist and hardware** come the same way. `scripts/web_status.py`
+  writes `players.json` (from `whitelist.json` and `ops.json`, at every start
+  and stop) and `vps.json` (only at a start). `bin/server` passes the server type
+  and location from the OpenTofu outputs, so they're the real ones even after a
+  sold-out fallback; the VPS measures its own CPUs, RAM and disk. The pages show
+  the hardware only while DNS points at the address in `vps.json`, so an older
+  VPS's file never shows. The bucket is private: only the Worker reads it, and
+  the whitelist only appears on `/admin`.
 - **Auth** is Cloudflare Access in front of `/admin*`. The Worker also verifies
   Access's signed `Cf-Access-Jwt-Assertion` header (`web/src/lib/server/access.ts`)
   and returns 403 without it, so a route that skips Access still can't press Stop.

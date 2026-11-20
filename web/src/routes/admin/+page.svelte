@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { duration } from '#lib/status.ts';
 	import type { Run } from '#lib/runs.ts';
+	import { disk, heap, memory, place } from '#lib/vps.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -82,6 +83,35 @@
 	</p>
 </section>
 
+{#if on}
+	<section class="card">
+		<h2>Hardware</h2>
+		{#if data.vps}
+			<dl class="specs">
+				<dt>Type</dt>
+				<dd>Hetzner {data.vps.type.toUpperCase()}</dd>
+				<dt>Location</dt>
+				<dd>{place(data.vps.location)}</dd>
+				<dt>CPU</dt>
+				<dd>{data.vps.cpus} vCPU{data.vps.cpu_model ? ` · ${data.vps.cpu_model}` : ''} ({data.vps.arch})</dd>
+				<dt>RAM</dt>
+				<dd>{memory(data.vps.memory_bytes)}{data.vps.heap ? `, ${heap(data.vps.heap)} of it for the game (heap)` : ''}</dd>
+				<dt>Disk</dt>
+				<dd>{disk(data.vps.disk_bytes)}</dd>
+			</dl>
+			<p class="muted" style="font-size:0.85rem;margin-bottom:0">
+				Measured on the VPS {ago(data.vps.updated)}, at the end of its start. When Hetzner is sold out,
+				<code>bin/server</code> picks another type or location (<code>SERVER_TYPES</code>,
+				<code>SERVER_LOCATIONS</code>).
+			</p>
+		{:else}
+			<p class="muted" style="margin-bottom:0">
+				Not known yet: the VPS writes it at the end of a start (<code>scripts/publish-status.sh</code>).
+			</p>
+		{/if}
+	</section>
+{/if}
+
 <section class="card">
 	<h2>Runs</h2>
 	{#if typeof runs === 'string'}
@@ -140,6 +170,55 @@
 		</div>
 		<p class="muted" style="font-size:0.85rem;margin-bottom:0">
 			Restores stay on the laptop: <code>server restore &lt;id&gt;</code>.
+		</p>
+	{/if}
+</section>
+
+<section class="card">
+	<h2>Whitelist</h2>
+	{#if !data.players}
+		<p class="muted" style="margin-bottom:0">
+			No list yet. The VPS writes it at every start and stop (<code>scripts/publish-status.sh</code>).
+		</p>
+	{:else}
+		<p class="muted" style="font-size:0.85rem">
+			{data.players.players.filter((p) => p.whitelisted).length} whitelisted, as of {ago(data.players.updated)}.
+		</p>
+		<div class="table-wrap">
+			<table>
+				<thead><tr><th>Player</th><th>Role</th></tr></thead>
+				<tbody>
+					{#each data.players.players as player (player.uuid)}
+						<tr>
+							<td>
+								<span class="player">
+									<img
+										src="https://mc-heads.net/avatar/{player.uuid}/20"
+										alt=""
+										width="20"
+										height="20"
+										loading="lazy"
+									/>
+									{player.name}
+								</span>
+							</td>
+							<td>
+								{#if player.op_level}
+									<span class="badge op">op {player.op_level}</span>
+								{/if}
+								{#if !player.whitelisted}
+									<span class="badge">not whitelisted</span>
+								{/if}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+		<p class="muted" style="font-size:0.85rem;margin-bottom:0">
+			The list comes from <code>MC_WHITELIST</code> in <code>secrets/app.enc.env</code>: every start
+			replaces the server's whitelist with it, so <code>/whitelist add</code> in game only lasts until
+			the next start.
 		</p>
 	{/if}
 </section>

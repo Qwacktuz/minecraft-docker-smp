@@ -139,8 +139,8 @@ On the VPS, `stop` does these in order, and stops at any failure with the VPS st
 2. Checks it reached R2.
 3. Runs `restic check` on 2% of the data. The VPS disk is the only other copy of
    the world, so it isn't deleted while the backups look damaged.
-4. Shuts down and publishes `world.zip`, `backups.json` (the web app's backup
-   list) and the web map. A failed upload only warns.
+4. Shuts down and publishes `world.zip`, the web app's backup list and
+   whitelist, and the web map. A failed upload only warns.
 5. Deletes the VPS.
 6. Copies the backup repository into the **vault** bucket from your laptop. That
    needs `rclone`, which devenv provides.
@@ -225,7 +225,8 @@ tests use mocks and dummy credentials.
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
-- `scripts/publish-status.sh`: `backups.json` for the web app.
+- `scripts/publish-status.sh`: the backup list, whitelist and hardware for the web
+  app (`backups.json`, `players.json`, `vps.json`; `scripts/web_status.py`).
 - `web/`: the web app (SvelteKit on a Cloudflare Worker), `server web` deploys it.
 - `watchdog/`: the idle auto-stop Worker; `watchdog/src/minecraft.js` is shared with `web/`.
 - `scripts/publish-map.sh`, `config/bluemap/`: the public web map.

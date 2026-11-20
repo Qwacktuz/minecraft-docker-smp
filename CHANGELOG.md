@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased: hardware and whitelist on the web app (2026-11-20)
+
+- The public page says what the server runs on: "Hetzner CX33 · 4 vCPU · 8 GB
+  RAM · Helsinki (hel1)". `/admin` has a Hardware card (type, location, CPU
+  model, RAM and the game's heap, disk) and a Whitelist card (names, heads, op
+  levels, and ops who aren't whitelisted).
+- The VPS publishes them to the private web bucket with the backup list:
+  `scripts/web_status.py` writes `players.json` at every start and stop, and
+  `vps.json` at a start. The type and location come from new OpenTofu outputs
+  (`server_type`, `server_location`), so they're right after a fallback too.
+  Hardware only shows while DNS points at the VPS that wrote it.
+- `publish-status.sh` uploads with `rclone copy`; a file that couldn't be
+  written keeps its last version, and only the backup list is required.
+
 ## Unreleased: the web app survives a failed DNS lookup (2026-11-20)
 
 - `/admin` (and the public page) sometimes answered 500 until a refresh. The

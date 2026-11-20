@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { duration, type Status } from '#lib/status.ts';
+	import { place, summary } from '#lib/vps.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -90,6 +91,11 @@
 					</p>
 				{/if}
 			</div>
+		{/if}
+		{#if data.hardware}
+			<p class="hardware">
+				{summary(data.hardware)} · {place(data.hardware.location)}
+			</p>
 		{/if}
 		<p class="muted" style="margin-bottom:0;font-size:0.85rem">
 			It stops itself after {data.idleMinutes / 60} hours with nobody online (bots count) or after

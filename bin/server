@@ -330,10 +330,20 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
   remote "$(printf 'REPO=%q SHA=%q RESTORE=%q bash -c %q' "$REPO" "$sha" "$restore" "$script")" \
     < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
 
-  # The backup list for the web app (web/); never blocks the start.
-  on vps "bash scripts/publish-status.sh" ||
-    echo "warning: could not publish backups.json for the web app" >&2
-  say "Running on the VPS: mc.cactuz.dev ($(tf output -raw ipv4_address))"
+  # The backup list, whitelist and hardware for the web app (web/); never
+  # blocks the start. The type and location come from the state, so they are
+  # the VPS's real ones even when it was created by an earlier fallback.
+  local ipv4 type location
+  ipv4=$(tf output -raw ipv4_address)
+  type=$(tf output -raw server_type 2>/dev/null) || type=
+  location=$(tf output -raw server_location 2>/dev/null) || location=
+  local web_env=
+  if [[ "$type" =~ ^[a-z0-9]+$ && "$location" =~ ^[a-z0-9-]+$ && "$ipv4" =~ ^[0-9.]+$ ]]; then
+    web_env="SERVER_TYPE=$type SERVER_LOCATION=$location SERVER_IPV4=$ipv4 "
+  fi
+  on vps "${web_env}bash scripts/publish-status.sh" ||
+    echo "warning: could not publish the status for the web app" >&2
+  say "Running on the VPS: mc.cactuz.dev ($ipv4)"
 }
 
 # Runs tofu apply with the first SERVER_TYPES x SERVER_LOCATIONS pair Hetzner

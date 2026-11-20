@@ -58,7 +58,7 @@ if name == "tofu":
     if "state" in args and flag("VPS"):
         print("hcloud_server.minecraft")
     if "output" in args:
-        print("192.0.2.1")
+        print({"server_type": "cx33", "server_location": "hel1"}.get(args[-1], "192.0.2.1"))
     if "apply" in args:
         # SOLD_OUT="cx33 cpx32@fsn1 ...": Hetzner can't place these types (everywhere,
         # or only in that location). APPLY_FAIL: any other error.
@@ -472,6 +472,12 @@ class ServerTests(unittest.TestCase):
                                         SOLD_OUT="")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.placements(calls), ["cax21@nbg1"])
+
+    def test_start_vps_publishes_the_server_type_for_the_web_app(self):
+        result, calls = self.run_server("start", "vps")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        publish = " ".join(calls[self.find(calls, "scripts/publish-status.sh")[0]]["argv"])
+        self.assertIn("SERVER_TYPE=cx33 SERVER_LOCATION=hel1 SERVER_IPV4=192.0.2.1 bash scripts/publish-status.sh", publish)
 
     def test_start_vps_sends_age_key_only_on_stdin(self):
         result, calls = self.run_server("start", "vps")

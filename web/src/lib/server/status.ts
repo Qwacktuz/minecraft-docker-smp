@@ -43,6 +43,11 @@ async function ping(env: Env, state: WatchdogState): Promise<Ping & { guessed: b
 }
 
 export async function getStatus(env: Env): Promise<Status> {
+	return (await getStatusAndAddress(env)).status;
+}
+
+/** The status, plus the address DNS points at (null when there is no VPS). */
+export async function getStatusAndAddress(env: Env): Promise<{ status: Status; address: string | null }> {
 	const state = ((await env.STATE.get('state', 'json')) ?? {}) as WatchdogState;
 	// The Cache API needs a URL key; it never leaves this data centre.
 	const key = new Request(`https://cache.internal/status/${env.HOST}`);
@@ -58,8 +63,9 @@ export async function getStatus(env: Env): Promise<Status> {
 				new Response(JSON.stringify(result), { headers: { 'cache-control': `max-age=${CACHE_SECONDS}` } })
 			);
 	}
-	return describe(result.address, result.online, state, result.at, {
+	const status = describe(result.address, result.online, state, result.at, {
 		idleMinutes: Number(env.IDLE_MINUTES),
 		maxDays: Number(env.MAX_DAYS)
 	}, result.names ?? []);
+	return { status, address: result.address };
 }
