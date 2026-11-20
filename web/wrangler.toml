@@ -27,8 +27,12 @@ ACCESS_AUD = "0ab0f239fdb291bc56c9b2c29416eef1730d15f67314a7469adbb4a19d2b2ad7"
 # one; tests/test_prices.py fails CI otherwise. Keep old types while last
 # month's usage still has them.
 [vars.HOURLY_PRICES_EUR]
-cx33 = 0.0
-cpx32 = 0.0
+cx33 = 0.0144
+cx43 = 0.0264
+cx53 = 0.0481
+cpx32 = 0.0489
+cax21 = 0.0176
+cax31 = 0.0344
 
 # The watchdog's state (watchdog/wrangler.toml): up since, last busy, last stop
 # request. The web app only reads it.
