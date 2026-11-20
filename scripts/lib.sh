@@ -8,7 +8,7 @@
 BACKUP_IMAGE=itzg/mc-backup:2026.11.1@sha256:d731fa58822525cc65a23fbd82f472be4fc74854ee313da36bb4872bdba722c7
 ALPINE_IMAGE=alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 JAVA_IMAGE=eclipse-temurin:25.0.5_8-jre@sha256:945247f9d092703e0c6be92243ef3c51640229e23ab34d353c8dcdc73e6cd4e6
-RCLONE_IMAGE=rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5
+RCLONE_IMAGE=rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
 
 # The restic host of the VPS backups (compose.yml RESTIC_HOST). Restores only
 # consider these snapshots.
