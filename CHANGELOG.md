@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: fall back to other locations too when Hetzner is sold out (2026-11-20)
+
+- `bin/server start` tries each of `SERVER_TYPES` in every location of
+  `SERVER_LOCATIONS` (default `hel1 fsn1 nbg1`) before the next type: `cx33` in
+  hel1, fsn1, nbg1, then `cpx32` in the same order. As before, only
+  `resource_unavailable` moves on. The VPS holds no state, so any location works;
+  players in Finland may see slightly higher latency from Germany.
+- `infra/main.tf` also ignores `location` changes, so a running VPS is never
+  moved. The start log says which type and location it got.
+
 ## Unreleased: anti-xray removed (2026-11-20)
 
 - **Meow Anti-Xray is removed**: it didn't work properly. `REMOVE_OLD_MODS`

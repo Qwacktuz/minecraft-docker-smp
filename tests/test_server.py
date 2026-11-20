@@ -60,9 +60,11 @@ if name == "tofu":
     if "output" in args:
         print("192.0.2.1")
     if "apply" in args:
-        # SOLD_OUT="cx33 ...": Hetzner can't place these types. APPLY_FAIL: any other error.
-        server_type = next((a.split("=", 1)[1] for a in args if a.startswith("server_type=")), "")
-        if server_type in os.environ.get("SOLD_OUT", "").split():
+        # SOLD_OUT="cx33 cpx32@fsn1 ...": Hetzner can't place these types (everywhere,
+        # or only in that location). APPLY_FAIL: any other error.
+        var = lambda name: next((a.split("=", 1)[1] for a in args if a.startswith(name + "=")), "")
+        sold_out = os.environ.get("SOLD_OUT", "").split()
+        if var("server_type") in sold_out or f"{var('server_type')}@{var('server_location')}" in sold_out:
             print("Error: error during placement (resource_unavailable, d3eda57e)", file=sys.stderr)
             sys.exit(1)
         if flag("APPLY_FAIL"):
@@ -156,7 +158,7 @@ class ServerTests(unittest.TestCase):
         log.touch()
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
-        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
+        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "SERVER_LOCATIONS", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
                          "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT"):
             env.pop(variable, None)
         env.update({key: value for key, value in flags.items()})
@@ -426,23 +428,36 @@ class ServerTests(unittest.TestCase):
     def applies(self, calls):
         return [c["argv"] for c in calls if c["argv"][0] == "tofu" and "apply" in c["argv"]]
 
-    def test_start_vps_tries_the_first_server_type(self):
+    def placements(self, calls):
+        """The type@location of each tofu apply, in order."""
+        def var(argv, name):
+            return next(a.split("=", 1)[1] for a in argv if a.startswith(name + "="))
+        return [f"{var(a, 'server_type')}@{var(a, 'server_location')}" for a in self.applies(calls)]
+
+    def test_start_vps_tries_the_first_type_and_location(self):
         result, calls = self.run_server("start", "vps")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual([a[-1] for a in self.applies(calls)], ["server_type=cx33"])
+        self.assertEqual(self.placements(calls), ["cx33@hel1"])
+        self.assertIn("a cx33 in hel1", result.stdout)
 
-    def test_start_vps_falls_back_when_hetzner_has_no_capacity(self):
-        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33")
+    def test_start_vps_tries_other_locations_before_another_type(self):
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33@hel1 cx33@fsn1")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual([a[-1] for a in self.applies(calls)], ["server_type=cx33", "server_type=cpx32"])
-        self.assertIn("no cx33 servers available", result.stdout)
+        self.assertEqual(self.placements(calls), ["cx33@hel1", "cx33@fsn1", "cx33@nbg1"])
+        self.assertIn("no cx33 servers available in hel1", result.stdout)
         self.assertTrue(self.find(calls, "scripts/deploy.sh"))
 
-    def test_start_vps_stops_when_every_type_is_sold_out(self):
+    def test_start_vps_falls_back_to_the_next_type(self):
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.placements(calls), ["cx33@hel1", "cx33@fsn1", "cx33@nbg1", "cpx32@hel1"])
+        self.assertTrue(self.find(calls, "scripts/deploy.sh"))
+
+    def test_start_vps_stops_when_everything_is_sold_out(self):
         result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cpx32")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("none of these server types", result.stderr)
-        self.assertEqual(len(self.applies(calls)), 2)
+        self.assertEqual(len(self.applies(calls)), 6)
         self.assertFalse(self.find(calls, "scripts/deploy.sh"))
 
     def test_start_vps_does_not_retry_other_apply_errors(self):
@@ -452,10 +467,11 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(self.applies(calls)), 1)
         self.assertFalse(self.find(calls, "scripts/deploy.sh"))
 
-    def test_server_types_can_be_overridden(self):
-        result, calls = self.run_server("start", "vps", SERVER_TYPES="cax21")
+    def test_server_types_and_locations_can_be_overridden(self):
+        result, calls = self.run_server("start", "vps", SERVER_TYPES="cax21", SERVER_LOCATIONS="nbg1",
+                                        SOLD_OUT="")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual([a[-1] for a in self.applies(calls)], ["server_type=cax21"])
+        self.assertEqual(self.placements(calls), ["cax21@nbg1"])
 
     def test_start_vps_sends_age_key_only_on_stdin(self):
         result, calls = self.run_server("start", "vps")

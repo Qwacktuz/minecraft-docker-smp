@@ -48,10 +48,14 @@ AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
 WORLD=data/minecraft/world/level.dat     # present once a world has been restored
 SAFETY_TAG=pre-restore                   # the safety backup restores take first
 SAFETY_KEEP=3                            # newest safety backups that keep the tag
-# Hetzner server types for a new VPS, in order of preference. Hetzner sometimes
-# has no capacity for a type in any location (resource_unavailable); then start
-# tries the next one. A running VPS keeps its type (infra/main.tf).
+# Hetzner server types and locations for a new VPS, in order of preference.
+# Hetzner sometimes has no capacity for a type in a location
+# (resource_unavailable); then start tries the same type in the next location,
+# then the next type. The VPS holds no state (the world is restored from R2 and
+# DNS follows it), so any location works. A running VPS keeps its type and
+# location (infra/main.tf).
 SERVER_TYPES=${SERVER_TYPES:-cx33 cpx32}
+SERVER_LOCATIONS=${SERVER_LOCATIONS:-hel1 fsn1 nbg1}
 YES=                                     # --yes: don't ask before restoring
 
 die() { echo "server: $*" >&2; exit 1; }
@@ -332,23 +336,30 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
   say "Running on the VPS: mc.cactuz.dev ($(tf output -raw ipv4_address))"
 }
 
-# Runs tofu apply with the first of SERVER_TYPES that Hetzner can place.
-# Only "resource_unavailable" moves on to the next type; any other error stops.
+# Runs tofu apply with the first SERVER_TYPES x SERVER_LOCATIONS pair Hetzner
+# can place: each type in every location before the next type, so the
+# preferred type wins wherever it is free. Only "resource_unavailable" moves
+# on; any other error stops.
 apply_vps() {
-  local type log status
+  local type location log status
   log=$(mktemp)
   for type in $SERVER_TYPES; do
-    status=0
-    tf apply -input=false -auto-approve -var "server_type=$type" 2>&1 | tee "$log" || status=$?
-    if (( status == 0 )); then
-      rm -f "$log"
-      return
-    fi
-    grep -q resource_unavailable "$log" || { rm -f "$log"; die "tofu apply failed"; }
-    say "Hetzner has no $type servers available right now; trying the next type."
+    for location in $SERVER_LOCATIONS; do
+      status=0
+      tf apply -input=false -auto-approve -var "server_location=$location" -var "server_type=$type" 2>&1 |
+        tee "$log" || status=$?
+      if (( status == 0 )); then
+        rm -f "$log"
+        say "The VPS is a $type in $location."
+        return
+      fi
+      grep -q resource_unavailable "$log" || { rm -f "$log"; die "tofu apply failed"; }
+      say "Hetzner has no $type servers available in $location right now; trying the next option."
+    done
   done
   rm -f "$log"
-  die "Hetzner has none of these server types available: $SERVER_TYPES (try again later, or set SERVER_TYPES)"
+  die "Hetzner has none of these server types available in $SERVER_LOCATIONS: $SERVER_TYPES" \
+    "(try again later, or set SERVER_TYPES / SERVER_LOCATIONS)"
 }
 
 stop() {
