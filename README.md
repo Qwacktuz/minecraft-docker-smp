@@ -16,7 +16,10 @@ server stop local        # only the local copy (needed when the VPS runs too)
 server status            # where is it running, and when was the last backup?
 server prune --dry-run   # which unused chunks would pruning delete?
 server prune             # back up, then delete unused chunks on the VPS
+server vault             # copy the backups into the locked vault bucket now
 server tofu plan         # run OpenTofu by hand with the encrypted credentials
+server watchdog          # deploy the idle auto-stop Worker (watchdog/)
+server web               # deploy the web app (web/) to smp.cactuz.dev
 ```
 
 **Testing beside the live server:** `server start local` works while the VPS
@@ -94,9 +97,9 @@ every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pru
 
 **A public world download.** Every VPS `stop` also uploads the world as
 **https://world.cactuz.dev/world.zip**, after the final backup and with the game
-stopped. It has no player data (inventories, positions, stats) and no Ledger logs, so anyone can take a
-copy to test redstone in singleplayer or on their own server; the zip's README.txt
-explains how. It lives in its own public bucket (`PUBLIC_WORLD_BUCKET` in
+stopped. It has no player data (inventories, positions, stats) and no Ledger
+logs, so anyone can take a copy to test redstone in singleplayer or on their own
+server; the zip's README.txt explains how. It lives in its own public bucket (`PUBLIC_WORLD_BUCKET` in
 `app.enc.env`), separate from the private backups. If the upload fails, `stop`
 only warns. It updates at each stop, not while the server runs.
 
@@ -142,7 +145,8 @@ On the VPS, `stop` does these in order, and stops at any failure with the VPS st
 2. Checks it reached R2.
 3. Runs `restic check` on 2% of the data. The VPS disk is the only other copy of
    the world, so it isn't deleted while the backups look damaged.
-4. Shuts down and publishes `world.zip`.
+4. Shuts down and publishes `world.zip`, `backups.json` (the web app's backup
+   list) and the web map. A failed upload only warns.
 5. Deletes the VPS.
 6. Copies the backup repository into the **vault** bucket from your laptop. That
    needs `rclone`, which devenv provides.
@@ -155,12 +159,12 @@ again any time with `server vault`. Restoring from the vault:
 ## Secrets
 
 Everything is SOPS/Age-encrypted in `secrets/`: `infra.enc.env` (laptop and the
-GitHub `Server` workflow: OpenTofu, the state bucket, the vault) and
-`app.enc.env` (Compose, the VPS backups). Edit them with `sops secrets/<file>`.
+GitHub `Server` workflow: OpenTofu, the state bucket, the vault, the Workers'
+deploy tokens) and `app.enc.env` (Compose, the VPS backups and uploads). Edit them with `sops secrets/<file>`.
 Two Age keys can decrypt them (`.sops.yaml`): yours, and a CI-only key whose one
 copy is the `SOPS_AGE_KEY` secret of the `prod` environment, which only `main`
-can use. The validate workflow needs no secrets. Each Cloudflare token reaches only its own buckets:
-[infra/README.md](infra/README.md#cloudflare-tokens-and-buckets).
+can use. The validate workflow needs no secrets. Each Cloudflare token reaches
+only its own buckets: [infra/README.md](infra/README.md#cloudflare-tokens-and-buckets).
 
 ## Alerts and updates
 

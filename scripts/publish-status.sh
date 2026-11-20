@@ -29,13 +29,6 @@ restic --no-lock snapshots --host "$WORLD_HOST" --json |
   python3 scripts/snapshots.py --json > "$OUT/backups.json" ||
   die "could not list the snapshots"
 
-# Same R2 credentials and rclone setup as publish-world.sh. -e NAME keeps the values out of argv.
-export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare
-export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
-export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-export RCLONE_CONFIG_R2_ENDPOINT="$R2_ENDPOINT" RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
-docker run --rm --user "$(id -u):$(id -g)" -v "$APP_DIR/$OUT:/upload:ro" \
-  -e RCLONE_CONFIG_R2_TYPE -e RCLONE_CONFIG_R2_PROVIDER -e RCLONE_CONFIG_R2_ACCESS_KEY_ID \
-  -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY -e RCLONE_CONFIG_R2_ENDPOINT -e RCLONE_CONFIG_R2_NO_CHECK_BUCKET \
-  "$RCLONE_IMAGE" copyto /upload/backups.json "r2:$WEB_BUCKET/backups.json"
+r2_rclone "$(id -u):$(id -g)" "$APP_DIR/$OUT:/upload:ro" \
+  copyto /upload/backups.json "r2:$WEB_BUCKET/backups.json"
 echo "Published backups.json to $WEB_BUCKET."

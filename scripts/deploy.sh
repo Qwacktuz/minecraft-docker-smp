@@ -46,7 +46,7 @@ fi
 mv -f -- "$ENV_FILE" .env
 compose=(docker compose)
 if [[ "${BACKUPS:-}" != 1 ]]; then
-  # Remove a backup container left over from an older setup.
+  # Without BACKUPS=1 nothing may back up: remove a backup container left behind.
   "${compose[@]}" --profile backup rm --stop --force backup >/dev/null 2>&1 || true
 fi
 

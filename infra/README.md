@@ -25,12 +25,13 @@ All secrets are SOPS/Age-encrypted in `secrets/`, and nothing else holds them:
 
 | File | Holds | Read by |
 |---|---|---|
-| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-bucket keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT`, `VAULT_*` vault keys, `HEALTHCHECKS_API_KEY` (pauses the alert check) | the laptop and the GitHub `Server` workflow: `bin/server`, via `sops exec-env`, per command |
-| `secrets/app.enc.env` | Compose settings: RCON, whitelist/ops, Restic and its R2 keys, `PUBLIC_WORLD_BUCKET` (the world download), `BACKUP_PING_URL` (backup alerts) | `scripts/deploy.sh` on the VPS (or a local copy), which writes the private `.env` |
+| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-bucket keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT`, `VAULT_*` vault keys, `HEALTHCHECKS_API_KEY` (pauses the alert check), `WATCHDOG_CLOUDFLARE_TOKEN` (deploys both Workers), `WATCHDOG_GITHUB_TOKEN` and `WEB_GITHUB_TOKEN` (the Workers' GitHub tokens) | the laptop and the GitHub `Server` workflow: `bin/server`, via `sops exec-env`, per command |
+| `secrets/app.enc.env` | Compose settings: RCON, whitelist/ops, Restic and its R2 keys, `PUBLIC_WORLD_BUCKET` (the world download and map), `WEB_BUCKET` (the web app's backup list), `BACKUP_PING_URL` (backup alerts) | `scripts/deploy.sh` on the VPS (or a local copy), which writes the private `.env` |
 
 Edit either with `sops secrets/<file>`, in plain `NAME=value` dotenv format, with
-no spaces around `=`. To add a secret, add a line there, nothing else. GitHub
-Actions only validates and needs no secrets. The VPS never stores the Age key:
+no spaces around `=`. To add a secret, add a line there, nothing else. The
+validate workflow needs no secrets; the Server workflow decrypts them with a
+CI-only Age key ([docs/auto-stop.md](../docs/auto-stop.md)). The VPS never stores the Age key:
 `bin/server` passes it over SSH stdin for each deploy.
 
 ### Cloudflare tokens and buckets
@@ -42,11 +43,13 @@ vault.
 |---|---|---|
 | DNS (account API token) | Zone Read + DNS Edit on cactuz.dev | `TF_VAR_cloudflare_api_token` (infra) |
 | R2 state | `cactuz-mc-tofu-state` | `AWS_*` (infra) |
-| R2 VPS | `cactuz-mc-backups`, `cactuz-mc-world` | `R2_*` (app) |
+| R2 VPS | `cactuz-mc-backups`, `cactuz-mc-world`, `mc-smp-web` | `R2_*` (app) |
+| Workers deploy | Workers Scripts, KV, R2 and Routes (see [docs/auto-stop.md](../docs/auto-stop.md), [docs/web.md](../docs/web.md)) | `WATCHDOG_CLOUDFLARE_TOKEN` (infra) |
 | R2 vault | `cactuz-mc-vault` | `VAULT_*` (infra) |
 
 - **`cactuz-mc-backups`**: the Restic repository.
-- **`cactuz-mc-world`**: public, at `world.cactuz.dev`.
+- **`cactuz-mc-world`**: public, at `world.cactuz.dev`: `world.zip` and `map/`.
+- **`mc-smp-web`**: private, read by the web app: `backups.json`.
 - **`cactuz-mc-tofu-state`**: the OpenTofu state, locked during runs (`use_lockfile`).
 - **`cactuz-mc-vault`**: a copy of the backups. R2 bucket lock rules keep
   `data/`, `index/`, `keys/` and `snapshots/` for 30 days, so not even a stolen VPS
@@ -71,11 +74,12 @@ Run OpenTofu by hand with the encrypted credentials through `bin/server tofu`
 before applying changes outside `bin/server start`/`stop`.
 
 `prevent_destroy` is false because `bin/server stop` deletes the VPS on purpose,
-after a verified backup. Backend locking is not yet configured, so don't run
-manual OpenTofu commands while `bin/server` is running.
+after a verified backup. The state is locked while OpenTofu runs
+(`use_lockfile` in `backend.tf`), so a manual command waits for, or fails
+against, a running `bin/server`.
 
-`ignore_changes = [user_data]` means editing cloud-init does not patch an existing
-host. Bootstrap currently downloads an AMD64 SOPS binary. ARM support and ongoing
-OS configuration require additional work.
+`ignore_changes = [user_data]` means editing cloud-init does not patch a running
+host; the change applies to the next VPS (every `start vps` makes a new one).
+Cloud-init installs the SOPS binary for amd64 or arm64.
 
 See [backup and restore](../docs/backup.md) before any replacement.

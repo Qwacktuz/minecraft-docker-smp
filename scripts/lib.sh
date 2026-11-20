@@ -54,7 +54,7 @@ world_snapshot() {
 
 # r2_rclone <user> <mount> <rclone args...>: runs rclone with the remote "r2:"
 # set to R2, using the backup bucket's keys from ./.env (they can also write the
-# public world bucket). <user> is a docker --user value or "root"; <mount> is a
+# public world bucket and WEB_BUCKET). <user> is a docker --user value or "root"; <mount> is a
 # docker -v value (e.g. "$PWD/x:/work:ro"). Keys are passed by name (-e NAME),
 # so they never appear in process lists.
 r2_rclone() {

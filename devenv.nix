@@ -70,7 +70,6 @@
   git-hooks.hooks = {
     shellcheck = {
       enable = true;
-      # The older backup scripts in scripts/ aren't lint-clean yet.
       files = "^(scripts/.*\\.sh|bin/server)$";
     };
     actionlint.enable = true;

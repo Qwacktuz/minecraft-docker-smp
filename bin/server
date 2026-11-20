@@ -153,8 +153,9 @@ verified_backup() {
 
 # Copies the backup repository's files into the vault bucket. Runs on the
 # laptop (or the GitHub runner) under both secret files: it reads the backups
-# with the VPS key and writes with the vault key, which never reaches the VPS. Only adds files, so
-# R2 bucket locks can stop anything in the vault from being deleted for 30 days.
+# with the VPS key and writes with the vault key, which never reaches the VPS.
+# Only adds files, so R2 bucket locks can stop anything in the vault from being
+# deleted for 30 days.
 # A copy of the vault is a complete restic repository (same password).
 # R2_* and VAULT_* come from `secrets all` (SC2031: lib.sh restic() reads ./.env in a subshell).
 # shellcheck disable=SC2154,SC2031

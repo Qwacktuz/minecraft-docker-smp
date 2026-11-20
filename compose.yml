@@ -63,7 +63,6 @@ services:
 
       REMOVE_OLD_MODS: true
       VANILLATWEAKS_SHARECODE: fBtCTb
-      # VERSION_FROM_MODRINTH_PROJECTS: true
       MODRINTH_ALLOWED_VERSION_TYPE: RELEASE
       MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE: RELEASE
       MODRINTH_DOWNLOAD_DEPENDENCIES: REQUIRED
@@ -72,7 +71,6 @@ services:
 
         fabric-api:Zns5SSRA # 0.166.2+26.3
         fabric-language-kotlin:SKW1BTL3 # 1.14.2+kotlin.2.4.21
-        #fabricexporter # Prometheus metrics; off since the monitoring stack was removed
 
         asynclogger:3Klv7aWV # 2.2.3+26.1.2-fabric (works on the server)
         spark:e3hsPc1o # 1.10.187-fabric
