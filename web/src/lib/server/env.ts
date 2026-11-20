@@ -12,8 +12,8 @@ export interface Env {
 	WORKFLOW: string;
 	WORLD_URL: string;
 	MAP_URL: string;
-	/** Euros per hour, or "" for hours only. */
-	HOURLY_PRICE_EUR: string;
+	/** Euros per hour per server type ([vars.HOURLY_PRICES_EUR]). */
+	HOURLY_PRICES_EUR: Record<string, number>;
 	ACCESS_TEAM_DOMAIN: string;
 	ACCESS_AUD: string;
 	/** A secret: `wrangler secret put GITHUB_TOKEN` (server web), or .dev.vars. */

@@ -7,9 +7,14 @@
   start or stop finishes or fails (with the GitHub run's log link), and the
   watchdog posts each auto-stop with its reason. Mentions are off; the URL
   never appears in a command line.
-- **Usage**: the watchdog counts the minutes a VPS exists each month
-  (`usage:YYYY-MM` in KV), and `/admin` shows this month's and last month's
-  hours, with a cost estimate once `HOURLY_PRICE_EUR` is set in `web/wrangler.toml`.
+- **Usage**: the watchdog counts the minutes a VPS exists each month, per
+  server type (`usage:YYYY-MM` in KV; the type comes from `vps.json`, so the
+  watchdog now reads the web bucket). `/admin` shows this month's and last
+  month's hours per type, and a cost from each type's own hourly price in
+  `[vars.HOURLY_PRICES_EUR]` (`web/wrangler.toml`). Hours of an unknown or
+  unpriced type are shown, not priced.
+- `tests/test_prices.py` fails CI when a type in `SERVER_TYPES` (`bin/server`)
+  has no plausible price (a positive number under 1 €/h) in that table.
 - **The public page links the web map** (`MAP_URL`, `/map/index.html`) next to
   the `world.zip` download.
 

@@ -11,12 +11,23 @@
 // Secrets: GITHUB_TOKEN, a fine-grained token that can only run workflows in
 // this repository, and optionally DISCORD_WEBHOOK_URL. GET / shows the current
 // state (no secrets).
-import { addUsage, decide, shouldDispatch, usageKey } from "./logic.js";
+import { addUsage, decide, shouldDispatch, usageKey, vpsType } from "./logic.js";
 import { dispatch, notify, playersOnline, runsInFlight, vpsAddress } from "./minecraft.js";
 
 // How often the cron trigger runs (wrangler.toml): each check that sees a VPS
 // counts this many minutes of uptime.
 const CHECK_MINUTES = 5;
+
+/** vps.json from the web bucket (scripts/publish-status.sh), or null. */
+async function readVps(env) {
+  try {
+    const object = await env.WEB?.get("vps.json");
+    return object ? await object.json() : null;
+  } catch (e) {
+    console.error(JSON.stringify({ event: "vps-json-unreadable", error: e.message }));
+    return null;
+  }
+}
 
 async function check(env) {
   const now = Math.floor(Date.now() / 1000);
@@ -43,7 +54,8 @@ async function check(env) {
   if (JSON.stringify(state) !== JSON.stringify(previous)) await env.STATE.put("state", JSON.stringify(state));
   if (address !== null) {
     const key = usageKey(now);
-    const usage = addUsage(await env.STATE.get(key, "json"), CHECK_MINUTES, now);
+    const type = vpsType(await readVps(env), address);
+    const usage = addUsage(await env.STATE.get(key, "json"), CHECK_MINUTES, now, type);
     await env.STATE.put(key, JSON.stringify(usage));
   }
   const result = { checked: new Date(now * 1000).toISOString(), stop, reason, action, online, state };

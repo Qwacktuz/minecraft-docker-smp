@@ -450,6 +450,8 @@ watchdog_deploy() {
   [[ "$account" =~ ^[0-9a-f]{32}$ ]] || die "could not read the Cloudflare account ID from R2_ENDPOINT"
   export CLOUDFLARE_ACCOUNT_ID=$account CLOUDFLARE_API_TOKEN=$WATCHDOG_CLOUDFLARE_TOKEN
   cd "$ROOT/watchdog"
+  # It reads vps.json from the web app's bucket (the server type for its uptime count).
+  wrangler r2 bucket info mc-smp-web >/dev/null 2>&1 || wrangler r2 bucket create mc-smp-web
   if grep -q REPLACE_WITH_KV_ID wrangler.toml; then
     say "Creating the Worker's KV namespace (once)..."
     id=$(wrangler kv namespace create mc-idle-watchdog-state 2>&1 | grep -oE '[0-9a-f]{32}' | head -n1 || true)

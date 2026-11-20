@@ -108,10 +108,22 @@ export function usageKey(now) {
 }
 
 /**
- * Adds one check's worth of uptime to a month's usage. since: when this month
- * was first counted (a month that started before the watchdog counted shows
- * less than it ran).
+ * Adds one check's worth of uptime to a month's usage, under the server type
+ * that ran (Hetzner prices differ per type; "unknown" when it isn't known).
+ * since: when this month was first counted (a month that started before the
+ * watchdog counted shows less than it ran).
  */
-export function addUsage(usage, minutes, now) {
-  return { since: usage?.since ?? now, minutes: (usage?.minutes ?? 0) + minutes };
+export function addUsage(usage, minutes, now, type = "unknown") {
+  const byType = { ...usage?.by_type };
+  byType[type] = (byType[type] ?? 0) + minutes;
+  return { since: usage?.since ?? now, minutes: (usage?.minutes ?? 0) + minutes, by_type: byType };
+}
+
+/**
+ * The server type from vps.json (written by the VPS at a start), when it
+ * describes the VPS at this address; "unknown" otherwise (a VPS still starting,
+ * or an older VPS's file).
+ */
+export function vpsType(vps, address) {
+  return vps && vps.ipv4 === address && /^[a-z0-9]+$/.test(vps.type ?? "") ? vps.type : "unknown";
 }

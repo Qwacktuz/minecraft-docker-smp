@@ -30,6 +30,9 @@ export interface Usage {
   since: number;
   /** Minutes the watchdog saw a VPS, one check (5 minutes) at a time. */
   minutes: number;
+  /** The same minutes per server type ("cx33", or "unknown"). Missing in months counted before types were. */
+  by_type?: Record<string, number>;
 }
 export function usageKey(now: number): string;
-export function addUsage(usage: Usage | null, minutes: number, now: number): Usage;
+export function addUsage(usage: Usage | null, minutes: number, now: number, type?: string): Usage;
+export function vpsType(vps: { ipv4?: string; type?: string } | null, address: string): string;

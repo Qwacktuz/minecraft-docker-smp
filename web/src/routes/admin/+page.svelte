@@ -123,6 +123,12 @@
 					<div class="value">{month.hours.toFixed(1)} h</div>
 					<div class="label">
 						{month.label}{month.cost !== null ? ` · ≈ €${month.cost.toFixed(2)}` : ''}
+						{#if month.types.length}
+							<br />{month.types.map((t) => `${t.type === 'unknown' ? 'unknown type' : t.type.toUpperCase()} ${t.hours.toFixed(1)} h`).join(', ')}
+						{/if}
+						{#if month.unpricedHours > 0}
+							<br />{month.unpricedHours.toFixed(1)} h not in the cost (no price)
+						{/if}
 						{#if month.countedSince}
 							<br />counted since {new Date(month.countedSince * 1000).toLocaleDateString()}
 						{/if}
@@ -131,12 +137,9 @@
 			{/each}
 		</div>
 		<p class="muted" style="font-size:0.85rem;margin-bottom:0">
-			Hours the VPS existed, counted by the idle watchdog every 5 minutes, whoever started it.
-			{#if data.usage[0].cost === null}
-				Set <code>HOURLY_PRICE_EUR</code> in <code>web/wrangler.toml</code> to see a cost estimate.
-			{:else}
-				The cost is hours × <code>HOURLY_PRICE_EUR</code>: a rough estimate, not Hetzner's invoice.
-			{/if}
+			Hours the VPS existed, counted by the idle watchdog every 5 minutes per server type, whoever
+			started it. The cost is each type's hours × its price in <code>[vars.HOURLY_PRICES_EUR]</code>
+			(<code>web/wrangler.toml</code>): a rough estimate, not Hetzner's invoice.
 		</p>
 	{/if}
 </section>

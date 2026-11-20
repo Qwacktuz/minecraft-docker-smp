@@ -40,11 +40,17 @@ browser ──► smp.cactuz.dev (Worker: web/)
   the hardware only while DNS points at the address in `vps.json`, so an older
   VPS's file never shows. The bucket is private: only the Worker reads it, and
   the whitelist only appears on `/admin`.
-- **Usage** comes from the watchdog, which counts the minutes it sees a VPS
-  (`usage:YYYY-MM` in the shared KV; [auto-stop.md](auto-stop.md)). Set
-  `HOURLY_PRICE_EUR` in `web/wrangler.toml` to the server type's hourly price
-  from the Hetzner console to see a cost: hours × price, a rough estimate rather
-  than the invoice. A month the watchdog started counting late says since when.
+- **Usage** comes from the watchdog, which counts the minutes it sees a VPS per
+  server type (`usage:YYYY-MM` in the shared KV; [auto-stop.md](auto-stop.md)).
+  The cost is each type's hours × its price in `[vars.HOURLY_PRICES_EUR]`
+  (`web/wrangler.toml`), from the Hetzner console: a rough estimate rather than
+  the invoice. Hours of an unknown type (a VPS that hadn't written `vps.json`
+  yet) or a type without a price are listed but not priced. A month the
+  watchdog started counting late says since when.
+- **Prices in CI:** `tests/test_prices.py` checks that every type in
+  `bin/server`'s `SERVER_TYPES` has a price there (a positive number under
+  1 €/h, so a monthly price can't slip in). When you add a fallback type, add
+  its price in the same commit; when Hetzner changes prices, update the table.
 - **Auth** is Cloudflare Access in front of `/admin*`. The Worker also verifies
   Access's signed `Cf-Access-Jwt-Assertion` header (`web/src/lib/server/access.ts`)
   and returns 403 without it, so a route that skips Access still can't press Stop.

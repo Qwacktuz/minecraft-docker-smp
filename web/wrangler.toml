@@ -17,13 +17,18 @@ WORKFLOW = "server.yml"
 WORLD_URL = "https://world.cactuz.dev/world.zip"
 # BlueMap's static map (docs/map.md). R2 serves no index for /map/, hence index.html.
 MAP_URL = "https://world.cactuz.dev/map/index.html"
-# The server's price per hour in euros, from the Hetzner console (Server ->
-# Rescale shows it per type). The admin page multiplies the watchdog's uptime
-# count by it; leave it empty to show hours only.
-HOURLY_PRICE_EUR = ""
 # Cloudflare Access in front of /admin (docs/web.md). Both are public values.
 ACCESS_TEAM_DOMAIN = "cactuz.cloudflareaccess.com"
 ACCESS_AUD = "0ab0f239fdb291bc56c9b2c29416eef1730d15f67314a7469adbb4a19d2b2ad7"
+
+# Each server type's price per hour in euros, from the Hetzner console (a
+# server's Rescale page lists them), for the admin page's cost estimate: the
+# watchdog counts uptime per type. Every type in bin/server's SERVER_TYPES needs
+# one; tests/test_prices.py fails CI otherwise. Keep old types while last
+# month's usage still has them.
+[vars.HOURLY_PRICES_EUR]
+cx33 = 0.0
+cpx32 = 0.0
 
 # The watchdog's state (watchdog/wrangler.toml): up since, last busy, last stop
 # request. The web app only reads it.
