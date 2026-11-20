@@ -76,7 +76,7 @@ services:
 
         asynclogger:3Klv7aWV # 2.2.3+26.1.2-fabric (works on the server)
         spark:e3hsPc1o # 1.10.187-fabric
-        #krypton
+        krypton:UugdIYJw # 0.3.2
         ferrite-core:d5ddUdiB # 9.0.0-fabric
         lithium:Lal8mJGR # mc26.3-0.26.4-fabric
         scalablelux:g4eqNSKd # 0.3.0-alpha.0.6+26.3 [alpha]
