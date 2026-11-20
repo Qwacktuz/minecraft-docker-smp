@@ -73,6 +73,18 @@ if [[ -n "${RESTORE:-}" ]]; then
     docker run --rm -v "$APP_DIR/data:/d" "$ALPINE_IMAGE" sh -c \
       'rm -rf /d/minecraft.previous; if [ -d /d/minecraft ]; then mv /d/minecraft /d/minecraft.previous; fi; mkdir -p /d/minecraft'
     restic --no-lock restore "$snapshot" --host "$WORLD_HOST" --target /
+    # BlueMap's tiles and render state aren't in the backups; they live in the
+    # public bucket (scripts/publish-map.sh). Without them BlueMap renders the
+    # whole world again, so a failed pull only warns.
+    # shellcheck disable=SC1091
+    public_bucket=$(set -a; . ./.env; echo "${PUBLIC_WORLD_BUCKET:-}")
+    if [[ -n "$public_bucket" ]]; then
+      echo "Pulling the published map (BlueMap then renders only what changed)..."
+      r2_rclone root "$APP_DIR/data/minecraft:/data" \
+        copy "r2:$public_bucket/$MAP_PREFIX" "/data/${MAP_WEB#data/minecraft/}" \
+        --fast-list --transfers 32 --stats-one-line --stats 1m ||
+        echo "warning: could not pull the published map; BlueMap renders it from scratch" >&2
+    fi
     fix_owner
   fi
 fi

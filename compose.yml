@@ -105,7 +105,7 @@ services:
         # No chunky: pre-generated chunks are exactly what pruning deletes (docs/pruning.md).
         packet-fixer:dTKbGYbb # 3.3.6
         luckperms:DzQPkkXY # v5.5.85-fabric
-        #bluemap
+        bluemap:SX74rxzP # 5.29-fabric
         vanish:KgeCcJWw # 1.6.16+26.3
         simple-voice-chat:x9jLR94Q # fabric-2.6.27+26.3 [beta]
         webcam-mod:SOF9XznV # fabric-4.4.1-26.3
@@ -163,7 +163,8 @@ services:
         curl -fsS -m 10 --retry 3 --data-binary "@$$2" "$$BACKUP_PING_URL/$$1" >/dev/null ||
           echo "could not reach the backup alert check" >&2
 
-      # Compression & Size Savings (exclude bluemap)
+      # Not backed up: BlueMap's map lives in the public bucket (docs/map.md);
+      # logs and caches.
       EXCLUDES: "bluemap,logs,cache,emotes,*.tmp,web,*.map"
 
       # Snapshots tagged pre-prune (taken before a chunk prune) and pre-restore

@@ -32,16 +32,9 @@ trap 'rm -f -- "$ZIP" "$ZIP.tmp"' EXIT
 python3 scripts/world_zip.py "$WORLD" "$ZIP.tmp"
 mv -- "$ZIP.tmp" "$ZIP"
 
-# Uses the backup bucket's R2 credentials. -e NAME keeps the values out of argv.
-export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare
-export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
-export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-export RCLONE_CONFIG_R2_ENDPOINT="$R2_ENDPOINT" RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
 # R2 swaps the object in only once the upload completes, so downloads never
 # see a partial file.
-docker run --rm --user "$(id -u):$(id -g)" -v "$APP_DIR/.cache:/upload:ro" \
-  -e RCLONE_CONFIG_R2_TYPE -e RCLONE_CONFIG_R2_PROVIDER -e RCLONE_CONFIG_R2_ACCESS_KEY_ID \
-  -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY -e RCLONE_CONFIG_R2_ENDPOINT -e RCLONE_CONFIG_R2_NO_CHECK_BUCKET \
-  "$RCLONE_IMAGE" copyto /upload/world.zip "r2:$PUBLIC_WORLD_BUCKET/world.zip" \
+r2_rclone "$(id -u):$(id -g)" "$APP_DIR/.cache:/upload:ro" \
+  copyto /upload/world.zip "r2:$PUBLIC_WORLD_BUCKET/world.zip" \
   --header-upload "Cache-Control: no-cache" --s3-chunk-size 64M
 echo "Published world.zip to $PUBLIC_WORLD_BUCKET."

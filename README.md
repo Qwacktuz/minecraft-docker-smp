@@ -65,6 +65,11 @@ it down. Whatever you do locally is never uploaded and is replaced by the next
 restore. Restores only consider snapshots from the VPS backup host
 (`mc-backup-worker`), so nothing else in the repository can become "latest".
 
+**A web map.** BlueMap renders the world while the VPS runs, and every VPS
+`stop` publishes it as static files to **https://world.cactuz.dev/map/**, so the
+map stays online while the server is off. The next `start vps` pulls it back,
+so only changed chunks are rendered again. Details: [docs/map.md](docs/map.md).
+
 **Pruning** deletes chunks nobody spent time in, while keeping builds, player
 homes, recent activity and a buffer around them. It can also run automatically
 every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pruning.md).
@@ -204,6 +209,7 @@ tests use mocks and dummy credentials.
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
+- `scripts/publish-map.sh`, `config/bluemap/`: the public web map.
 - `scripts/restore.sh` (`world`, `regions`, `rollback`) and
   `scripts/test-backup.sh`: backup tools, run on the app host by hand or by
   `server restore` / `server check`. They share `scripts/lib.sh` (pinned images,

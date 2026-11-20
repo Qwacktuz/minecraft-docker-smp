@@ -52,5 +52,34 @@ world_snapshot() {
     python3 "$(dirname -- "${BASH_SOURCE[0]}")/snapshots.py" --find "$1"
 }
 
+# r2_rclone <user> <mount> <rclone args...>: runs rclone with the remote "r2:"
+# set to R2, using the backup bucket's keys from ./.env (they can also write the
+# public world bucket). <user> is a docker --user value or "root"; <mount> is a
+# docker -v value (e.g. "$PWD/x:/work:ro"). Keys are passed by name (-e NAME),
+# so they never appear in process lists.
+r2_rclone() {
+  local user=$1 mount=$2
+  shift 2
+  (set -a
+   # shellcheck disable=SC1091
+   . ./.env
+   set +a
+   export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare
+   export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+   export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+   export RCLONE_CONFIG_R2_ENDPOINT="$R2_ENDPOINT" RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
+   local as=()
+   [[ "$user" == root ]] || as=(--user "$user")
+   docker run --rm "${as[@]}" -v "$mount" \
+     -e RCLONE_CONFIG_R2_TYPE -e RCLONE_CONFIG_R2_PROVIDER -e RCLONE_CONFIG_R2_ACCESS_KEY_ID \
+     -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY -e RCLONE_CONFIG_R2_ENDPOINT -e RCLONE_CONFIG_R2_NO_CHECK_BUCKET \
+     "$RCLONE_IMAGE" "$@")
+}
+
+# Where BlueMap writes its web app and tiles (config/bluemap/webapp.conf), and
+# where scripts/publish-map.sh publishes them in PUBLIC_WORLD_BUCKET.
+MAP_WEB=data/minecraft/bluemap/web
+MAP_PREFIX=map
+
 # Gives the world files back to the game's user (uid 1000).
 fix_owner() { docker run --rm -v "$PWD/data/minecraft:/data" "$ALPINE_IMAGE" chown -R 1000:1000 /data; }
