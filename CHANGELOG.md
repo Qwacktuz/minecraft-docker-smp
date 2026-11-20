@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: the web app survives a failed DNS lookup (2026-11-20)
+
+- `/admin` (and the public page) sometimes answered 500 until a refresh. The
+  status check's DNS-over-HTTPS lookup threw on a network error, and nothing
+  caught it. Now it retries once, then falls back to the address the watchdog
+  last saw (Workers KV), and logs `dns-lookup-failed`. A fallback result isn't
+  cached, so the next load looks again.
+
 ## Unreleased: fall back to other locations too when Hetzner is sold out (2026-11-20)
 
 - `bin/server start` tries each of `SERVER_TYPES` in every location of
