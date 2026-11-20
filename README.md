@@ -76,6 +76,12 @@ container use and kills in `world/ledger.sqlite` (in the backups, not in
 roll back in game, e.g. `/lg i` (inspect blocks by clicking), `/lg search
 player:Name range:20 after:2d`, `/lg rollback range:20 before:1h`.
 
+**Anti-xray.** [Meow Anti-Xray](https://modrinth.com/mod/meowanti-xray) sends ores
+that don't touch air as stone (or netherrack), so X-ray clients see nothing
+useful; nothing changes for normal play. Settings: `config/meowantixray.yml`;
+`/antixray status` shows them. (DrexHD's AntiXray is incompatible with Fast
+Noise, `zfastnoise`.)
+
 **Pruning** deletes chunks nobody spent time in, while keeping builds, player
 homes, recent activity and a buffer around them. It can also run automatically
 every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pruning.md).
