@@ -452,15 +452,23 @@ class ServerTests(unittest.TestCase):
     def test_start_vps_falls_back_to_the_next_type(self):
         result, calls = self.run_server("start", "vps", SOLD_OUT="cx33")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.placements(calls), ["cx33@hel1", "cx33@fsn1", "cx33@nbg1", "cpx32@hel1"])
+        self.assertEqual(self.placements(calls), ["cx33@hel1", "cx33@fsn1", "cx33@nbg1", "cx43@hel1"])
         self.assertTrue(self.find(calls, "scripts/deploy.sh"))
 
     def test_start_vps_stops_when_everything_is_sold_out(self):
-        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cpx32")
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cx43 cx53 cpx32")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("none of these server types", result.stderr)
-        self.assertEqual(len(self.applies(calls)), 6)
+        self.assertEqual(len(self.applies(calls)), 12)  # 4 types x 3 locations
+        self.assertEqual(self.placements(calls)[-1], "cpx32@nbg1")
         self.assertFalse(self.find(calls, "scripts/deploy.sh"))
+
+    def test_start_vps_tries_cpx32_last(self):
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cx43 cx53")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.placements(calls)[-1], "cpx32@hel1")
+        self.assertEqual(len(self.applies(calls)), 10)
+        self.assertTrue(self.find(calls, "scripts/deploy.sh"))
 
     def test_start_vps_does_not_retry_other_apply_errors(self):
         result, calls = self.run_server("start", "vps", APPLY_FAIL="1")

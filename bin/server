@@ -54,7 +54,13 @@ SAFETY_KEEP=3                            # newest safety backups that keep the t
 # then the next type. The VPS holds no state (the world is restored from R2 and
 # DNS follows it), so any location works. A running VPS keeps its type and
 # location (infra/main.tf).
-SERVER_TYPES=${SERVER_TYPES:-cx33 cpx32}
+# The order is by price (web/wrangler.toml has each one's; tests/test_prices.py
+# checks they're there): the cheapest that fits, then bigger CX machines, which
+# still cost less than a cpx32. The game's heap is fixed (MEMORY in compose.yml),
+# so more cores and RAM only help. cpx32 comes last because Hetzner tends to run
+# out of a whole family at once, and it's from another one. No ARM (cax*) until
+# the mods are tested on it.
+SERVER_TYPES=${SERVER_TYPES:-cx33 cx43 cx53 cpx32}
 SERVER_LOCATIONS=${SERVER_LOCATIONS:-hel1 fsn1 nbg1}
 YES=                                     # --yes: don't ask before restoring
 

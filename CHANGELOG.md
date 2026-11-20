@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: cheaper fallback types (2026-11-21)
+
+- `SERVER_TYPES` defaults to `cx33 cx43 cx53 cpx32`. At Hetzner's prices
+  (`web/wrangler.toml`: 0.0144, 0.0264, 0.0481 and 0.0489 €/h), `cx43` and
+  `cx53` are bigger and cheaper than `cpx32`. More cores and RAM don't change the
+  game's 5 GB heap. `cpx32` stays last, as a different family for when Hetzner
+  has run out of the CX ones. ARM types (`cax21`, `cax31`) aren't in the list
+  until the mods have been tested on ARM; their prices are already set.
+- `[vars.HOURLY_PRICES_EUR]` has the prices of all six types.
+
 ## Unreleased: leaderboards (2026-11-20)
 
 - **https://smp.cactuz.dev/leaderboard**: top 10s for playtime, distance

@@ -2,7 +2,8 @@
 
 OpenTofu provisions a Hetzner VPS (Debian 13; a `cx33` in `hel1`, or when
 Hetzner has none, the next free pair of `SERVER_TYPES` and `SERVER_LOCATIONS`
-in `bin/server`: `cx33` in `fsn1`, `nbg1`, then `cpx32`), firewall,
+in `bin/server`: `cx33` in `fsn1`, `nbg1`, then `cx43`, `cx53` and `cpx32`, each
+in all three), firewall,
 DNS records, and a Tailscale bootstrap key. Cloud-init installs Docker, SOPS,
 Tailscale, UFW, and other host packages.
 
