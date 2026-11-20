@@ -113,6 +113,35 @@
 {/if}
 
 <section class="card">
+	<h2>Usage</h2>
+	{#if !data.usage}
+		<p class="muted" style="margin-bottom:0">Could not read the uptime count.</p>
+	{:else}
+		<div class="stats">
+			{#each data.usage as month (month.label)}
+				<div class="stat">
+					<div class="value">{month.hours.toFixed(1)} h</div>
+					<div class="label">
+						{month.label}{month.cost !== null ? ` · ≈ €${month.cost.toFixed(2)}` : ''}
+						{#if month.countedSince}
+							<br />counted since {new Date(month.countedSince * 1000).toLocaleDateString()}
+						{/if}
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="muted" style="font-size:0.85rem;margin-bottom:0">
+			Hours the VPS existed, counted by the idle watchdog every 5 minutes, whoever started it.
+			{#if data.usage[0].cost === null}
+				Set <code>HOURLY_PRICE_EUR</code> in <code>web/wrangler.toml</code> to see a cost estimate.
+			{:else}
+				The cost is hours × <code>HOURLY_PRICE_EUR</code>: a rough estimate, not Hetzner's invoice.
+			{/if}
+		</p>
+	{/if}
+</section>
+
+<section class="card">
 	<h2>Runs</h2>
 	{#if typeof runs === 'string'}
 		<p class="notice error">Could not read the runs from GitHub: {runs}</p>

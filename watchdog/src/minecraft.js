@@ -93,3 +93,17 @@ export async function dispatch(env, action) {
   });
   if (response.status !== 204) throw new Error(`starting the ${action} failed: ${response.status} ${await response.text()}`);
 }
+
+/**
+ * Posts a message to Discord when the DISCORD_WEBHOOK_URL secret is set
+ * (bin/server watchdog). Mentions are off, so a player name can't ping anyone.
+ */
+export async function notify(env, content) {
+  if (!env.DISCORD_WEBHOOK_URL) return;
+  const response = await fetch(env.DISCORD_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+  });
+  if (!response.ok) throw new Error(`Discord webhook failed: ${response.status}`);
+}

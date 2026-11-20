@@ -100,3 +100,18 @@ export function shouldDispatch(state, runsInFlight, now, cooldownMinutes = 30) {
   if (runsInFlight > 0) return false;
   return !state.last_dispatch || now - state.last_dispatch >= cooldownMinutes * 60;
 }
+
+/** The KV key for one month's VPS uptime (UTC): "usage:2026-11". */
+export function usageKey(now) {
+  const date = new Date(now * 1000);
+  return `usage:${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Adds one check's worth of uptime to a month's usage. since: when this month
+ * was first counted (a month that started before the watchdog counted shows
+ * less than it ran).
+ */
+export function addUsage(usage, minutes, now) {
+  return { since: usage?.since ?? now, minutes: (usage?.minutes ?? 0) + minutes };
+}

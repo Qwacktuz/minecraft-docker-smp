@@ -69,10 +69,14 @@ restore. Restores only consider snapshots from the VPS backup host
 (`mc-backup-worker`), so nothing else in the repository can become "latest".
 
 **A web page:** **https://smp.cactuz.dev** shows whether the server is up, who's
-online, when it will stop itself, and the world download. Admins sign in at
-`/admin` (Cloudflare Access) to start or stop it, follow the run step by step, and
-see the backups. It runs the same GitHub workflow as the button above. Setup and
-local development: [docs/web.md](docs/web.md).
+online, what it runs on, when it will stop itself, and links to the map and the
+world download. Admins sign in at `/admin` (Cloudflare Access) to start or stop
+it, follow the run step by step, and see the hardware, this month's hours and
+cost, the backups and the whitelist. It runs the same GitHub workflow as the
+button above. Setup and local development: [docs/web.md](docs/web.md).
+
+**Discord:** starts, stops, failures and auto-stops can post to a channel
+through a webhook: [docs/notifications.md](docs/notifications.md).
 
 **A web map.** BlueMap renders the world while the VPS runs, and every VPS
 `stop` publishes it as static files to **https://world.cactuz.dev/map/**, so the

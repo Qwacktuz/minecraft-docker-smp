@@ -15,6 +15,12 @@ MAX_DAYS = "14"
 REPO = "Qwacktuz/minecraft-docker-smp"
 WORKFLOW = "server.yml"
 WORLD_URL = "https://world.cactuz.dev/world.zip"
+# BlueMap's static map (docs/map.md). R2 serves no index for /map/, hence index.html.
+MAP_URL = "https://world.cactuz.dev/map/index.html"
+# The server's price per hour in euros, from the Hetzner console (Server ->
+# Rescale shows it per type). The admin page multiplies the watchdog's uptime
+# count by it; leave it empty to show hours only.
+HOURLY_PRICE_EUR = ""
 # Cloudflare Access in front of /admin (docs/web.md). Both are public values.
 ACCESS_TEAM_DOMAIN = "cactuz.cloudflareaccess.com"
 ACCESS_AUD = "0ab0f239fdb291bc56c9b2c29416eef1730d15f67314a7469adbb4a19d2b2ad7"

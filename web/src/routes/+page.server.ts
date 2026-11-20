@@ -18,6 +18,7 @@ export const load: PageServerLoad = async () => {
 		})(),
 		host: env.HOST,
 		worldUrl: env.WORLD_URL,
+		mapUrl: env.MAP_URL,
 		idleMinutes: Number(env.IDLE_MINUTES),
 		maxDays: Number(env.MAX_DAYS)
 	};

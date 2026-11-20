@@ -5,12 +5,14 @@ A SvelteKit app in `web/`, running as a Cloudflare Worker. It doesn't replace
 
 - **`/`, public:** is the server up, who's online (names and skin heads), how
   long until the idle auto-stop, what it runs on (e.g. "Hetzner CX33 · 4 vCPU ·
-  8 GB RAM · Helsinki"), how to join, and the `world.zip` download. It reloads the
+  8 GB RAM · Helsinki"), how to join, and links to the web map (`MAP_URL`) and
+  the `world.zip` download. It reloads the
   numbers every 30 seconds (`/api/status`).
 - **`/admin`, behind Cloudflare Access:** Start/Redeploy and Stop buttons, the
   Server workflow's recent runs with their steps as they go, the VPS's hardware
-  (type, location, CPU, RAM, the game's heap, disk), the backup list, and the
-  whitelist with ops.
+  (type, location, CPU, RAM, the game's heap, disk), the hours the VPS ran this
+  month and last (with a cost estimate), the backup list, and the whitelist with
+  ops.
 
 ## How it works
 
@@ -38,6 +40,11 @@ browser ──► smp.cactuz.dev (Worker: web/)
   the hardware only while DNS points at the address in `vps.json`, so an older
   VPS's file never shows. The bucket is private: only the Worker reads it, and
   the whitelist only appears on `/admin`.
+- **Usage** comes from the watchdog, which counts the minutes it sees a VPS
+  (`usage:YYYY-MM` in the shared KV; [auto-stop.md](auto-stop.md)). Set
+  `HOURLY_PRICE_EUR` in `web/wrangler.toml` to the server type's hourly price
+  from the Hetzner console to see a cost: hours × price, a rough estimate rather
+  than the invoice. A month the watchdog started counting late says since when.
 - **Auth** is Cloudflare Access in front of `/admin*`. The Worker also verifies
   Access's signed `Cf-Access-Jwt-Assertion` header (`web/src/lib/server/access.ts`)
   and returns 403 without it, so a route that skips Access still can't press Stop.

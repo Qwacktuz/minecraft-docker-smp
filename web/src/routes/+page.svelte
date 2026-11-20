@@ -105,10 +105,16 @@
 {/if}
 
 <section class="card">
-	<h2>Download the world</h2>
+	<h2>Explore the world</h2>
 	<p>
-		A copy of the world without player data, updated each time the server stops. Good for
-		testing redstone in singleplayer.
+		A 3D map of the Overworld, Nether and End, and a copy of the world without player data
+		(good for testing redstone in singleplayer). Both are updated each time the server stops, and
+		stay online while it sleeps.
 	</p>
-	<a class="button primary" href={data.worldUrl}>Download world.zip</a>
+	<div style="display:flex;gap:8px;flex-wrap:wrap">
+		{#if data.mapUrl}
+			<a class="button primary" href={data.mapUrl}>Open the map</a>
+		{/if}
+		<a class="button" href={data.worldUrl}>Download world.zip</a>
+	</div>
 </section>

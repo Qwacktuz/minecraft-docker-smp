@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decide, parseStatus, parseStatusDetails, readVarint, shouldDispatch, statusRequest, varint } from "../src/logic.js";
+import { addUsage, decide, parseStatus, parseStatusDetails, readVarint, shouldDispatch, statusRequest, usageKey, varint } from "../src/logic.js";
 
 const HOUR = 3600;
 const config = { idleMinutes: 120, maxDays: 7 };
@@ -82,4 +82,15 @@ test("dispatches once, not while a run is in flight or right after a request", (
   assert.equal(shouldDispatch({}, 1, 1000), false);
   assert.equal(shouldDispatch({ last_dispatch: 1000 }, 0, 1000 + 29 * 60), false);
   assert.equal(shouldDispatch({ last_dispatch: 1000 }, 0, 1000 + 30 * 60), true);
+});
+
+test("usage is counted per UTC month", () => {
+  assert.equal(usageKey(Date.UTC(2026, 10, 30, 23, 59) / 1000), "usage:2026-11");
+  assert.equal(usageKey(Date.UTC(2026, 11, 1, 0, 0) / 1000), "usage:2026-12");
+});
+
+test("usage adds minutes and remembers when counting started", () => {
+  const first = addUsage(null, 5, 1000);
+  assert.deepEqual(first, { since: 1000, minutes: 5 });
+  assert.deepEqual(addUsage(first, 5, 2000), { since: 1000, minutes: 10 });
 });

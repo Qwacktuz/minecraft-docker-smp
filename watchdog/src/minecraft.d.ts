@@ -28,3 +28,4 @@ export function github(env: GitHubEnv, path: string, init?: RequestInit): Promis
 export function recentRuns(env: GitHubEnv, count?: number): Promise<WorkflowRun[]>;
 export function runsInFlight(env: GitHubEnv): Promise<number>;
 export function dispatch(env: GitHubEnv, action: 'start' | 'stop'): Promise<void>;
+export function notify(env: { DISCORD_WEBHOOK_URL?: string }, content: string): Promise<void>;

@@ -27,7 +27,7 @@ All secrets are SOPS/Age-encrypted in `secrets/`, and nothing else holds them:
 
 | File | Holds | Read by |
 |---|---|---|
-| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-bucket keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT`, `VAULT_*` vault keys, `HEALTHCHECKS_API_KEY` (pauses the alert check), `WATCHDOG_CLOUDFLARE_TOKEN` (deploys both Workers), `WATCHDOG_GITHUB_TOKEN` and `WEB_GITHUB_TOKEN` (the Workers' GitHub tokens) | the laptop and the GitHub `Server` workflow: `bin/server`, via `sops exec-env`, per command |
+| `secrets/infra.enc.env` | `TF_VAR_*` provider settings, `AWS_*` state-bucket keys, `TOFU_BACKEND_BUCKET`/`ENDPOINT`, `VAULT_*` vault keys, `HEALTHCHECKS_API_KEY` (pauses the alert check), `WATCHDOG_CLOUDFLARE_TOKEN` (deploys both Workers), `WATCHDOG_GITHUB_TOKEN` and `WEB_GITHUB_TOKEN` (the Workers' GitHub tokens), optional `DISCORD_WEBHOOK_URL` ([docs/notifications.md](../docs/notifications.md)) | the laptop and the GitHub `Server` workflow: `bin/server`, via `sops exec-env`, per command |
 | `secrets/app.enc.env` | Compose settings: RCON, whitelist/ops, Restic and its R2 keys, `PUBLIC_WORLD_BUCKET` (the world download and map), `WEB_BUCKET` (the web app's backup list), `BACKUP_PING_URL` (backup alerts) | `scripts/deploy.sh` on the VPS (or a local copy), which writes the private `.env` |
 
 Edit either with `sops secrets/<file>`, in plain `NAME=value` dotenv format, with

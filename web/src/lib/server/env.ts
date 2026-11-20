@@ -11,6 +11,9 @@ export interface Env {
 	REPO: string;
 	WORKFLOW: string;
 	WORLD_URL: string;
+	MAP_URL: string;
+	/** Euros per hour, or "" for hours only. */
+	HOURLY_PRICE_EUR: string;
 	ACCESS_TEAM_DOMAIN: string;
 	ACCESS_AUD: string;
 	/** A secret: `wrangler secret put GITHUB_TOKEN` (server web), or .dev.vars. */

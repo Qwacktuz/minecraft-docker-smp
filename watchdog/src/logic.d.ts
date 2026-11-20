@@ -25,3 +25,11 @@ export function decide(
   config: { idleMinutes: number; maxDays: number },
 ): { stop: boolean; reason: string; state: WatchdogState };
 export function shouldDispatch(state: WatchdogState, runsInFlight: number, now: number, cooldownMinutes?: number): boolean;
+export interface Usage {
+  /** Unix seconds when this month was first counted. */
+  since: number;
+  /** Minutes the watchdog saw a VPS, one check (5 minutes) at a time. */
+  minutes: number;
+}
+export function usageKey(now: number): string;
+export function addUsage(usage: Usage | null, minutes: number, now: number): Usage;
