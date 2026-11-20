@@ -13,6 +13,7 @@
 # Backups (read-only; they work from the laptop with no VPS):
 #   bin/server backups [--vault]        list the snapshots with their dates and tags
 #   bin/server check [percent] [--vault]  check the backups' integrity (default 5%)
+#   bin/server unpin <id> [--yes]       let retention delete a checked pre-prune snapshot
 #   bin/server drill [snapshot-id]      restore a local copy from the vault, check
 #                                       that it starts, stop it again
 #
@@ -174,6 +175,7 @@ vault() {
 # Pauses the backup alert check (healthchecks.io) while the server is stopped,
 # so the missing pings don't alert. The next backup ping resumes it. Does
 # nothing unless BACKUP_PING_URL (app) and HEALTHCHECKS_API_KEY (infra) are set.
+# shellcheck disable=SC2031 # the values come from `secrets all`, not a subshell
 pause_alerts() {
   [[ -n "${BACKUP_PING_URL:-}" && -n "${HEALTHCHECKS_API_KEY:-}" ]] || return 0
   local check=${BACKUP_PING_URL%/}
@@ -186,13 +188,16 @@ pause_alerts() {
 
 # `keep_tagged <tag> <snapshot> <n>` tags a VPS snapshot and keeps the tag on
 # the newest <n> only; older ones fall back to normal retention (compose.yml
-# keeps tagged snapshots). Prints the newest tagged snapshot's ID.
+# keeps tagged snapshots). <n> = 0 keeps every tag until `server unpin`.
+# Prints the newest tagged snapshot's ID.
 keep_tagged() {
   local tag=$1 snapshot=$2 keep=$3 snaps old
   vps_restic tag --add "$tag" "$snapshot" >/dev/null || die "could not tag snapshot ${snapshot:0:8} $tag"
   snaps=$(vps_restic snapshots --tag "$tag" --json | snapshot_list) || die "could not list the $tag snapshots"
-  old=$(tail -n +"$((keep + 1))" <<< "$snaps" | cut -d' ' -f2 | tr '\n' ' ')
-  if [[ -n "$old" ]]; then vps_restic tag --remove "$tag" "$old" >/dev/null || true; fi
+  if (( keep > 0 )); then
+    old=$(tail -n +"$((keep + 1))" <<< "$snaps" | cut -d' ' -f2 | tr '\n' ' ')
+    if [[ -n "$old" ]]; then vps_restic tag --remove "$tag" "$old" >/dev/null || true; fi
+  fi
   head -n1 <<< "$snaps" | cut -d' ' -f2
 }
 
@@ -423,6 +428,23 @@ source_flag() {
 }
 source_name() { if [[ "${RESTIC_SOURCE:-}" == vault ]]; then echo "the vault ($VAULT_BUCKET)"; else echo "R2"; fi; }
 
+# `unpin <id>` removes the pre-prune tag from a snapshot once the pruned world
+# has been checked in game; normal retention may then delete it. Runs in the
+# VPS backup container when the VPS is up, else from the laptop.
+unpin() {
+  [[ -n "${1:-}" ]] || usage 1 >&2
+  local id=$1
+  [[ "$id" =~ ^[0-9a-f]{8,64}$ ]] || die "'$id' is not a snapshot ID"
+  confirm "Unpin snapshot $id? Normal retention may then delete it from R2 (the vault keeps its copy)."
+  if [[ "$(where_running)" == vps ]]; then
+    vps_restic tag --remove pre-prune "$id" >/dev/null || die "could not unpin $id"
+  else
+    laptop_restic --retry-lock 2m tag --remove pre-prune "$id" --host "$WORLD_HOST" >/dev/null ||
+      die "could not unpin $id"
+  fi
+  say "Unpinned $id."
+}
+
 backups() {
   source_flag "${1:-}"
   say "Backups of the world in $(source_name) (newest last):"
@@ -583,7 +605,15 @@ rollback() {
   fi
 }
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+unpin_args() {
+  local id=''
+  for arg; do
+    case "$arg" in --yes | -y) YES=1 ;; *) id=$arg ;; esac
+  done
+  unpin "$id"
+}
+
+usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 # Runs tofu init with the state bucket from the decrypted infra secrets.
 # shellcheck disable=SC2154 # TOFU_BACKEND_* come from secrets/infra.enc.env
@@ -605,6 +635,7 @@ case "${1:-} ${2:-}" in
   "drill "*) drill "${2:-}" ;;
   "restore "*) shift; restore "$@" ;;
   "rollback "*) rollback "${2:-}" ;;
+  "unpin "*) shift; unpin_args "$@" ;;
   "-h "* | "--help "* | "help "*) usage ;;
   # Hidden commands: `secrets` runs these with the decrypted values in the environment.
   "_tofu "*) shift; tofu -chdir="$ROOT/infra" "$@" ;;

@@ -89,7 +89,8 @@ the Tailscale app, and your Age key in `SOPS_AGE_KEY_FILE` (default
 - **`backup`**: `itzg/mc-backup` with Restic, VPS only (Compose profile `backup`).
   It backs up hourly, pausing when no players are online, and applies snapshot
   retention. Snapshots tagged `pre-prune` (before a prune) and `pre-restore` (the
-  safety backup before `server restore`) are kept for rollbacks.
+  safety backup before `server restore`) are kept for rollbacks. Pre-prune
+  snapshots stay pinned until you run `server unpin <id>`.
 
 The world is in `data/minecraft` (gitignored). On the VPS, the app lives in `~/app`.
 Restores, rollbacks, drills and recovery by hand: [docs/backup.md](docs/backup.md).

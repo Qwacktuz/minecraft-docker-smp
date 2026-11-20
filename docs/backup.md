@@ -19,6 +19,10 @@ server drill                 # restore the newest vault snapshot locally, start 
 server drill <id>            # the same for one snapshot
 ```
 
+`server unpin <id>` removes the `pre-prune` pin from a snapshot once its pruned
+world is checked in game ([pruning.md](pruning.md)). It is the one backup command
+that writes, and only that tag.
+
 - `check` runs `scripts/test-backup.sh` here without a lock (`--no-lock`), so
   it doesn't block a running VPS's backups. If the VPS prunes old snapshots at
   the same moment, the check can report missing data; run it again.

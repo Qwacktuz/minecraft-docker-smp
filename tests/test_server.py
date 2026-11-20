@@ -121,7 +121,8 @@ class ServerTests(unittest.TestCase):
             'echo "{\\"argv\\": [\\"prune.sh\\", \\"$*\\"], \\"stdin\\": \\"\\"}" >> "$MOCK_LOG"\n')
         (root / "prune").mkdir()
         (root / "prune/settings.env").write_text(
-            f"AUTO_PRUNE_DAYS={flags.pop('AUTO_PRUNE_DAYS', '0')}\nPRUNE_KEEP_SNAPSHOTS=2\n")
+            f"AUTO_PRUNE_DAYS={flags.pop('AUTO_PRUNE_DAYS', '0')}\n"
+            f"PRUNE_KEEP_SNAPSHOTS={flags.pop('PRUNE_KEEP', '2')}\n")
         shutil.copy(SERVER, root / "bin/server")
         for script in ("lib.sh", "snapshots.py", "regions.py", "test-backup.sh"):
             shutil.copy(SERVER.parents[1] / "scripts" / script, root / "scripts" / script)
@@ -293,6 +294,32 @@ class ServerTests(unittest.TestCase):
         self.assertIn("s1 s2 s3", untag)
         self.assertNotIn("s0", untag)
         self.assertIn("rollbacks: abd", result.stdout)
+
+    def test_prune_keep_zero_pins_every_pre_prune_snapshot(self):
+        snaps = json.dumps([{"id": f"s{n}", "time": iso(-86400 * n)} for n in range(4)])
+        result, calls = self.run_server("prune", VPS="1", PRE_PRUNE=snaps, PRUNE_KEEP="0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.find(calls, "tag --add pre-prune abc"))
+        self.assertFalse(self.find(calls, "tag --remove"))
+
+    def test_unpin_on_the_vps(self):
+        result, calls = self.run_server("unpin", "abcdef12", "--yes", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = calls[self.find(calls, "tag --remove pre-prune abcdef12")[0]]
+        self.assertEqual(call["argv"][0], "ssh")
+        self.assertIn("--host mc-backup-worker", " ".join(call["argv"]))
+
+    def test_unpin_without_a_vps_runs_from_the_laptop(self):
+        result, calls = self.run_server("unpin", "abcdef12", "--yes")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = calls[self.find(calls, "tag --remove pre-prune abcdef12")[0]]
+        self.assertNotEqual(call["argv"][0], "ssh")
+        self.assertIn("--host mc-backup-worker", " ".join(call["argv"]))
+
+    def test_unpin_rejects_a_bad_id(self):
+        result, calls = self.run_server("unpin", "latest", "--yes")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.find(calls, "tag --remove"))
 
     def test_failed_prune_restarts_the_game(self):
         result, calls = self.run_server("prune", VPS="1", PRUNE_FAIL="1")

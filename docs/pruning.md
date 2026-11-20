@@ -62,12 +62,34 @@ A real prune only runs on the VPS, because the local copy is read-only and is ne
 backed up. `server prune` on the VPS does the following:
 
 1. Takes a backup and checks that it reached R2.
-2. Tags that snapshot `pre-prune`. Retention never deletes it, and only the newest
-   `PRUNE_KEEP_SNAPSHOTS` (3) keep the tag.
+2. Tags (pins) that snapshot `pre-prune`. Retention never deletes a pinned
+   snapshot. With `PRUNE_KEEP_SNAPSHOTS=0` (the default), every pre-prune snapshot
+   stays pinned until you unpin it by hand; see below.
 3. Stops the game, runs `scripts/prune.sh`, and starts the game again. If the prune
    fails, it still restarts the game, and it prints the pre-prune snapshot ID.
 
 The hourly backup saves the pruned world from there on.
+
+## Checking a prune, then unpinning its backup
+
+Every pre-prune snapshot stays in R2 until someone has checked the pruned world:
+
+1. After a prune, play: visit your builds, farms and bases, and the edges of
+   explored land.
+2. If it looks good, unpin that prune's backup:
+
+   ```bash
+   server backups              # pre-prune snapshots carry the tag
+   server unpin <pre-prune-id> # asks first; --yes skips the question
+   ```
+
+   Normal retention (`PRUNE_RESTIC_RETENTION` in compose.yml) may then delete it
+   from R2. The vault keeps its own copy anyway: copies into it only add files.
+3. If something is missing, undo the prune instead (next sections).
+
+`unpin` runs in the VPS backup container while the VPS is up, and from the laptop
+otherwise. Setting `PRUNE_KEEP_SNAPSHOTS` to a number makes each prune unpin all
+but the newest that many, automatically.
 
 ## Automatic pruning
 

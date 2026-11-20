@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased: pinned pre-prune backups (2026-11-20)
+
+- **Every pre-prune snapshot stays pinned** (`PRUNE_KEEP_SNAPSHOTS=0`) until an
+  admin has checked the pruned world in game and runs `server unpin <id>`.
+  Before, only the newest 3 kept the tag.
+
 ## Unreleased: backup commands, restores, rollback (2026-11-20)
 
 - **Read-only backup commands from the laptop**, no VPS needed (Docker and the
