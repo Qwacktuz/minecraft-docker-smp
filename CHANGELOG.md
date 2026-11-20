@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased: backup commands, restores, rollback (2026-11-20)
+
+- **Read-only backup commands from the laptop**, no VPS needed (Docker and the
+  Age key are enough):
+  - `server backups [--vault]` lists the `mc-backup-worker` snapshots with
+    their dates and tags.
+  - `server check [percent] [--vault]` runs `scripts/test-backup.sh` here,
+    without a lock, so it writes nothing and never blocks the VPS's backups.
+  - `server drill [id]` restores a read-only local copy from the vault bucket,
+    waits for the game's health check, and stops it again.
+- **`server restore <id>`** (admins, laptop only; not in the GitHub workflow).
+  With the VPS running it asks, takes a verified safety backup tagged
+  `pre-restore`, then runs `scripts/restore.sh world <id>` under the deploy
+  lock, with the backup container stopped and recreated. With nothing running
+  it starts a read-only local copy of `<id>` instead.
+- **`server restore <id> --region <overworld|nether|end> <x> <z> [radius]`**
+  restores only the region files around a block position (region =
+  floor(block / 512); `scripts/regions.py`), with the same safety backup.
+- **`server rollback`** restores the newest safety backup. It lives in R2, so
+  after the VPS was deleted it starts the VPS from it.
+- **Restores only use VPS snapshots, also for explicit IDs.** restic ignores
+  `--host` for an explicit snapshot ID, so `restore.sh` and `deploy.sh` now
+  resolve IDs against the `mc-backup-worker` list (`snapshots.py --find`) and
+  refuse other hosts' snapshots and ambiguous prefixes. `deploy.sh` accepts
+  `RESTORE=<snapshot-id>`. `scripts/lib.sh` restic can read the vault
+  (`RESTIC_SOURCE=vault`) and works with decrypted credentials instead of
+  `.env`.
+- **Retention keeps `pre-restore` snapshots** (newest 3 keep the tag).
+- **`scripts/pin_mods.py`** pins `MODRINTH_PROJECTS` to Modrinth version IDs,
+  run from the laptop. The mods are not pinned yet: this session could not
+  reach Modrinth.
+- **Renovate:** `dependencyDashboard` uses the object form (Renovate 44 asked
+  for the migration).
+- Tests: `tests/test_server.py` (new commands), `test_regions.py`,
+  `test_pin_mods.py`, plus `test_restore.py`, `test_deploy.py`,
+  `test_snapshots.py` for ID resolution and the vault. None of it was run
+  against a real server yet.
+
 ## Unreleased: start from GitHub, idle auto-stop (2026-11-19)
 
 - **Start and stop from GitHub.** `.github/workflows/server.yml` runs
