@@ -11,7 +11,7 @@
 
 <header>
 	<a href="/" class="brand">Cactuz SMP</a>
-	<nav><a href="/admin">Admin</a></nav>
+	<nav><a href="/leaderboard">Leaderboard</a> <a href="/admin">Admin</a></nav>
 </header>
 <main>
 	{@render children()}

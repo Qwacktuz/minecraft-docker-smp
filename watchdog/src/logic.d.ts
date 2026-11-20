@@ -25,3 +25,14 @@ export function decide(
   config: { idleMinutes: number; maxDays: number },
 ): { stop: boolean; reason: string; state: WatchdogState };
 export function shouldDispatch(state: WatchdogState, runsInFlight: number, now: number, cooldownMinutes?: number): boolean;
+export interface Usage {
+  /** Unix seconds when this month was first counted. */
+  since: number;
+  /** Minutes the watchdog saw a VPS, one check (5 minutes) at a time. */
+  minutes: number;
+  /** The same minutes per server type ("cx33", or "unknown"). Missing in months counted before types were. */
+  by_type?: Record<string, number>;
+}
+export function usageKey(now: number): string;
+export function addUsage(usage: Usage | null, minutes: number, now: number, type?: string): Usage;
+export function vpsType(vps: { ipv4?: string; type?: string } | null, address: string): string;

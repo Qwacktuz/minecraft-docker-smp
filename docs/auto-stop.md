@@ -47,6 +47,14 @@ Details:
   and each failed run shows in the Actions tab.
 - It keeps its state (when the VPS was first seen, when someone was last
   online, the last stop request) in a Workers KV namespace.
+- It also counts how long a VPS exists each month: every check that sees one
+  adds 5 minutes to `usage:YYYY-MM` in KV, whoever started it, under the server
+  type from `vps.json` in the web app's bucket (or "unknown" before the VPS has
+  written it). The web app's admin page shows the hours and a cost estimate
+  ([web.md](web.md)). That's one KV write per check while a VPS runs (288 a
+  day), within the free plan's 1000.
+- With `DISCORD_WEBHOOK_URL` set, it posts each auto-stop and its reason to
+  Discord ([notifications.md](notifications.md)).
 - See what it last decided: open its `workers.dev` URL (printed by
   `server watchdog`), or the Worker's logs in the Cloudflare dashboard.
 - The limits are `[vars]` in `watchdog/wrangler.toml`. Change them, then run
@@ -63,6 +71,8 @@ the runs (one run in ten hours), so they aren't used any more.
    Profile → API Tokens → Create Token → Custom token, with these permissions:
    - Account → **Workers Scripts** → Edit
    - Account → **Workers KV Storage** → Edit
+   - Account → **Workers R2 Storage** → Edit (it reads `vps.json` from the web
+     app's bucket, and `server watchdog` creates the bucket if it's missing)
 2. **A GitHub token** for the Worker. Go to GitHub → Settings → Developer settings
    → Fine-grained tokens → Generate new token:
    - Repository access: **Only select repositories** → `minecraft-docker-smp`.

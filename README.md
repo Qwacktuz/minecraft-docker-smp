@@ -69,10 +69,15 @@ restore. Restores only consider snapshots from the VPS backup host
 (`mc-backup-worker`), so nothing else in the repository can become "latest".
 
 **A web page:** **https://smp.cactuz.dev** shows whether the server is up, who's
-online, when it will stop itself, and the world download. Admins sign in at
-`/admin` (Cloudflare Access) to start or stop it, follow the run step by step, and
-see the backups. It runs the same GitHub workflow as the button above. Setup and
-local development: [docs/web.md](docs/web.md).
+online, what it runs on, when it will stop itself, and links to the map and the
+world download. `/leaderboard` ranks players by playtime, distance, blocks
+placed and mined, kills and deaths. Admins sign in at `/admin` (Cloudflare Access) to start or stop
+it, follow the run step by step, and see the hardware, this month's hours and
+cost, the backups and the whitelist. It runs the same GitHub workflow as the
+button above. Setup and local development: [docs/web.md](docs/web.md).
+
+**Discord:** starts, stops, failures and auto-stops can post to a channel
+through a webhook: [docs/notifications.md](docs/notifications.md).
 
 **A web map.** BlueMap renders the world while the VPS runs, and every VPS
 `stop` publishes it as static files to **https://world.cactuz.dev/map/**, so the
@@ -139,8 +144,8 @@ On the VPS, `stop` does these in order, and stops at any failure with the VPS st
 2. Checks it reached R2.
 3. Runs `restic check` on 2% of the data. The VPS disk is the only other copy of
    the world, so it isn't deleted while the backups look damaged.
-4. Shuts down and publishes `world.zip`, `backups.json` (the web app's backup
-   list) and the web map. A failed upload only warns.
+4. Shuts down and publishes `world.zip`, the web app's backup list and
+   whitelist, and the web map. A failed upload only warns.
 5. Deletes the VPS.
 6. Copies the backup repository into the **vault** bucket from your laptop. That
    needs `rclone`, which devenv provides.
@@ -225,7 +230,9 @@ tests use mocks and dummy credentials.
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
-- `scripts/publish-status.sh`: `backups.json` for the web app.
+- `scripts/publish-status.sh`: the backup list, whitelist, hardware and
+  leaderboard for the web app (`backups.json`, `players.json`, `vps.json`,
+  `leaderboard.json`; `scripts/web_status.py`, `scripts/leaderboard.py`).
 - `web/`: the web app (SvelteKit on a Cloudflare Worker), `server web` deploys it.
 - `watchdog/`: the idle auto-stop Worker; `watchdog/src/minecraft.js` is shared with `web/`.
 - `scripts/publish-map.sh`, `config/bluemap/`: the public web map.

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { duration, type Status } from '#lib/status.ts';
+	import { place, summary } from '#lib/vps.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -91,6 +92,11 @@
 				{/if}
 			</div>
 		{/if}
+		{#if data.hardware}
+			<p class="hardware">
+				{summary(data.hardware)} · {place(data.hardware.location)}
+			</p>
+		{/if}
 		<p class="muted" style="margin-bottom:0;font-size:0.85rem">
 			It stops itself after {data.idleMinutes / 60} hours with nobody online (bots count) or after
 			{data.maxDays} days, and backs up first.
@@ -99,10 +105,16 @@
 {/if}
 
 <section class="card">
-	<h2>Download the world</h2>
+	<h2>Explore the world</h2>
 	<p>
-		A copy of the world without player data, updated each time the server stops. Good for
-		testing redstone in singleplayer.
+		A 3D map of the Overworld, Nether and End, and a copy of the world without player data
+		(good for testing redstone in singleplayer). Both are updated each time the server stops, and
+		stay online while it sleeps.
 	</p>
-	<a class="button primary" href={data.worldUrl}>Download world.zip</a>
+	<div style="display:flex;gap:8px;flex-wrap:wrap">
+		{#if data.mapUrl}
+			<a class="button primary" href={data.mapUrl}>Open the map</a>
+		{/if}
+		<a class="button" href={data.worldUrl}>Download world.zip</a>
+	</div>
 </section>

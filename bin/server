@@ -54,11 +54,17 @@ SAFETY_KEEP=3                            # newest safety backups that keep the t
 # then the next type. The VPS holds no state (the world is restored from R2 and
 # DNS follows it), so any location works. A running VPS keeps its type and
 # location (infra/main.tf).
-SERVER_TYPES=${SERVER_TYPES:-cx33 cpx32}
+# The order is by price (web/wrangler.toml has each one's; tests/test_prices.py
+# checks they're there): the cheapest that fits, then bigger CX machines, which
+# still cost less than a cpx32. The game's heap is fixed (MEMORY in compose.yml),
+# so more cores and RAM only help. cpx32 comes last because Hetzner tends to run
+# out of a whole family at once, and it's from another one. No ARM (cax*) until
+# the mods are tested on it.
+SERVER_TYPES=${SERVER_TYPES:-cx33 cx43 cx53 cpx32}
 SERVER_LOCATIONS=${SERVER_LOCATIONS:-hel1 fsn1 nbg1}
 YES=                                     # --yes: don't ask before restoring
 
-die() { echo "server: $*" >&2; exit 1; }
+die() { LAST_ERROR="$*"; echo "server: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
 need() { for tool; do command -v "$tool" >/dev/null || die "'$tool' is not installed or not on PATH"; done; }
 
@@ -304,6 +310,7 @@ start_vps() {
     fi
   fi
 
+  NOTIFY_FAILURE=start
   say "Creating or updating the VPS..."
   apply_vps
 
@@ -330,10 +337,22 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
   remote "$(printf 'REPO=%q SHA=%q RESTORE=%q bash -c %q' "$REPO" "$sha" "$restore" "$script")" \
     < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
 
-  # The backup list for the web app (web/); never blocks the start.
-  on vps "bash scripts/publish-status.sh" ||
-    echo "warning: could not publish backups.json for the web app" >&2
-  say "Running on the VPS: mc.cactuz.dev ($(tf output -raw ipv4_address))"
+  # The backup list, whitelist and hardware for the web app (web/); never
+  # blocks the start. The type and location come from the state, so they are
+  # the VPS's real ones even when it was created by an earlier fallback.
+  local ipv4 type location
+  ipv4=$(tf output -raw ipv4_address)
+  type=$(tf output -raw server_type 2>/dev/null) || type=
+  location=$(tf output -raw server_location 2>/dev/null) || location=
+  local web_env=
+  if [[ "$type" =~ ^[a-z0-9]+$ && "$location" =~ ^[a-z0-9-]+$ && "$ipv4" =~ ^[0-9.]+$ ]]; then
+    web_env="SERVER_TYPE=$type SERVER_LOCATION=$location SERVER_IPV4=$ipv4 "
+  fi
+  on vps "${web_env}bash scripts/publish-status.sh" ||
+    echo "warning: could not publish the status for the web app" >&2
+  say "Running on the VPS: mc.cactuz.dev ($ipv4)"
+  NOTIFY_FAILURE=
+  notify "🟢 The server is up: \`mc.cactuz.dev\`${type:+ ($(tr '[:lower:]' '[:upper:]' <<< "$type") in $location)} ($(run_origin))"
 }
 
 # Runs tofu apply with the first SERVER_TYPES x SERVER_LOCATIONS pair Hetzner
@@ -384,6 +403,7 @@ stop() {
     return
   fi
 
+  NOTIFY_FAILURE=stop
   remote true 2>/dev/null ||
     die "a VPS exists but is unreachable; check it before destroying (tofu -chdir=infra destroy)"
   if prune_due; then
@@ -418,6 +438,8 @@ stop() {
     echo "warning: could not pause the backup alert check; expect an alert" >&2
   vault || echo "warning: could not copy the backups into the vault; run 'bin/server vault' later" >&2
   say "Stopped. The world is safe in R2."
+  NOTIFY_FAILURE=
+  notify "🔴 The server is stopped and the world is backed up ($(run_origin))"
 }
 
 # Deploys the idle auto-stop Worker (watchdog/) to Cloudflare with wrangler.
@@ -434,6 +456,8 @@ watchdog_deploy() {
   [[ "$account" =~ ^[0-9a-f]{32}$ ]] || die "could not read the Cloudflare account ID from R2_ENDPOINT"
   export CLOUDFLARE_ACCOUNT_ID=$account CLOUDFLARE_API_TOKEN=$WATCHDOG_CLOUDFLARE_TOKEN
   cd "$ROOT/watchdog"
+  # It reads vps.json from the web app's bucket (the server type for its uptime count).
+  wrangler r2 bucket info mc-smp-web >/dev/null 2>&1 || wrangler r2 bucket create mc-smp-web
   if grep -q REPLACE_WITH_KV_ID wrangler.toml; then
     say "Creating the Worker's KV namespace (once)..."
     id=$(wrangler kv namespace create mc-idle-watchdog-state 2>&1 | grep -oE '[0-9a-f]{32}' | head -n1 || true)
@@ -442,8 +466,11 @@ watchdog_deploy() {
     say "KV namespace $id written to watchdog/wrangler.toml; commit it."
   fi
   wrangler deploy
-  # The token goes to wrangler on stdin, never in its arguments.
+  # The secrets go to wrangler on stdin, never in its arguments.
   printf '%s' "$WATCHDOG_GITHUB_TOKEN" | wrangler secret put GITHUB_TOKEN
+  if [[ -n "${DISCORD_WEBHOOK_URL:-}" ]]; then
+    printf '%s' "$DISCORD_WEBHOOK_URL" | wrangler secret put DISCORD_WEBHOOK_URL
+  fi
 }
 
 # Builds and deploys the web app (web/) to Cloudflare with wrangler. Runs under
@@ -468,6 +495,50 @@ web_deploy() {
   wrangler deploy
   printf '%s' "$WEB_GITHUB_TOKEN" | wrangler secret put GITHUB_TOKEN
 }
+
+# --- Discord -------------------------------------------------------------------
+
+# Posts a message to Discord when DISCORD_WEBHOOK_URL is set in
+# secrets/infra.enc.env. A failed post only warns.
+notify() {
+  secrets infra _notify "$1" || echo "warning: could not post to Discord" >&2
+}
+
+# Runs under `secrets infra`. The URL holds the webhook's token, so it goes to
+# curl in a config file, never in its arguments. Mentions are off.
+# shellcheck disable=SC2154 # DISCORD_WEBHOOK_URL comes from sops exec-env
+discord_post() {
+  [[ -n "${DISCORD_WEBHOOK_URL:-}" ]] || return 0
+  [[ "$DISCORD_WEBHOOK_URL" =~ ^https://(ptb\.|canary\.)?discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$ ]] ||
+    { echo "DISCORD_WEBHOOK_URL is not a Discord webhook URL" >&2; return 1; }
+  jq -n --arg content "$1" '{content: $content, allowed_mentions: {parse: []}}' |
+    curl -fsS -m 10 -H 'content-type: application/json' --data-binary @- \
+      -K <(printf 'url = "%s"\n' "$DISCORD_WEBHOOK_URL") >/dev/null
+}
+
+# Where to read more: this run's GitHub log, or the laptop's terminal.
+run_origin() {
+  if [[ -n "${GITHUB_RUN_ID:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+    printf '[log](%s/%s/actions/runs/%s)' "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+  else
+    printf 'from the laptop'
+  fi
+}
+
+# A start or stop sets NOTIFY_FAILURE ("start" or "stop") once it really begins
+# (after any confirmation), and clears it when it's done. Exiting with an error
+# in between (die, or a failed command under set -e) posts the failure.
+NOTIFY_FAILURE=
+LAST_ERROR=
+notify_failure_on_exit() {
+  local code=$?
+  if (( code != 0 )) && [[ -n "$NOTIFY_FAILURE" ]]; then
+    local what=$NOTIFY_FAILURE
+    NOTIFY_FAILURE=
+    notify "⚠️ The server $what failed${LAST_ERROR:+: $LAST_ERROR} ($(run_origin))"
+  fi
+}
+trap notify_failure_on_exit EXIT
 
 # Deletes tailnet devices named $1 via the Tailscale API. Runs under
 # `secrets infra`, which provides the OAuth client credentials.
@@ -755,6 +826,7 @@ case "${1:-} ${2:-}" in
   "_vault-copy "*) vault_copy ;;
   "_pause-alerts "*) pause_alerts ;;
   "_forget-device "*) forget_device "$2" ;;
+  "_notify "*) discord_post "$2" ;;
   "_watchdog-deploy "*) watchdog_deploy ;;
   "_web-deploy "*) web_deploy ;;
   "_restic "*) shift; restic "$@" ;;

@@ -47,6 +47,8 @@ if name == "sops" and args[:1] == ["exec-env"]:
                        RESTIC_PASSWORD="restic-secret")
     else:
         secrets.update(VAULT_ACCESS_KEY_ID="vault-id", VAULT_SECRET_ACCESS_KEY="vault-secret")
+        if os.environ.get("DISCORD"):
+            secrets["DISCORD_WEBHOOK_URL"] = "https://discord.com/api/webhooks/123/webhook-token"
     sys.exit(subprocess.call(["sh", "-c", args[2]], env=dict(os.environ, **secrets)))
 if name == "tofu":
     if "TF_VAR_hcloud_token" not in os.environ:
@@ -58,7 +60,7 @@ if name == "tofu":
     if "state" in args and flag("VPS"):
         print("hcloud_server.minecraft")
     if "output" in args:
-        print("192.0.2.1")
+        print({"server_type": "cx33", "server_location": "hel1"}.get(args[-1], "192.0.2.1"))
     if "apply" in args:
         # SOLD_OUT="cx33 cpx32@fsn1 ...": Hetzner can't place these types (everywhere,
         # or only in that location). APPLY_FAIL: any other error.
@@ -158,7 +160,7 @@ class ServerTests(unittest.TestCase):
         log.touch()
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
-        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "SERVER_LOCATIONS", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
+        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "SERVER_LOCATIONS", "GITHUB_RUN_ID", "GITHUB_REPOSITORY", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
                          "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT"):
             env.pop(variable, None)
         env.update({key: value for key, value in flags.items()})
@@ -450,15 +452,23 @@ class ServerTests(unittest.TestCase):
     def test_start_vps_falls_back_to_the_next_type(self):
         result, calls = self.run_server("start", "vps", SOLD_OUT="cx33")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.placements(calls), ["cx33@hel1", "cx33@fsn1", "cx33@nbg1", "cpx32@hel1"])
+        self.assertEqual(self.placements(calls), ["cx33@hel1", "cx33@fsn1", "cx33@nbg1", "cx43@hel1"])
         self.assertTrue(self.find(calls, "scripts/deploy.sh"))
 
     def test_start_vps_stops_when_everything_is_sold_out(self):
-        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cpx32")
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cx43 cx53 cpx32")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("none of these server types", result.stderr)
-        self.assertEqual(len(self.applies(calls)), 6)
+        self.assertEqual(len(self.applies(calls)), 12)  # 4 types x 3 locations
+        self.assertEqual(self.placements(calls)[-1], "cpx32@nbg1")
         self.assertFalse(self.find(calls, "scripts/deploy.sh"))
+
+    def test_start_vps_tries_cpx32_last(self):
+        result, calls = self.run_server("start", "vps", SOLD_OUT="cx33 cx43 cx53")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.placements(calls)[-1], "cpx32@hel1")
+        self.assertEqual(len(self.applies(calls)), 10)
+        self.assertTrue(self.find(calls, "scripts/deploy.sh"))
 
     def test_start_vps_does_not_retry_other_apply_errors(self):
         result, calls = self.run_server("start", "vps", APPLY_FAIL="1")
@@ -472,6 +482,48 @@ class ServerTests(unittest.TestCase):
                                         SOLD_OUT="")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.placements(calls), ["cax21@nbg1"])
+
+    def test_start_vps_publishes_the_server_type_for_the_web_app(self):
+        result, calls = self.run_server("start", "vps")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        publish = " ".join(calls[self.find(calls, "scripts/publish-status.sh")[0]]["argv"])
+        self.assertIn("SERVER_TYPE=cx33 SERVER_LOCATION=hel1 SERVER_IPV4=192.0.2.1 bash scripts/publish-status.sh", publish)
+
+    def discord_posts(self, calls):
+        posts = [c for c in calls if c["argv"][0] == "curl" and '"content"' in c.get("stdin", "")]
+        for post in posts:
+            self.assertNotIn("webhook-token", " ".join(post["argv"]))  # only in curl's config file
+        return [json.loads(p["stdin"])["content"] for p in posts]
+
+    def test_start_vps_posts_to_discord(self):
+        result, calls = self.run_server("start", "vps", DISCORD="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.discord_posts(calls),
+                         ["🟢 The server is up: `mc.cactuz.dev` (CX33 in hel1) (from the laptop)"])
+
+    def test_failed_start_posts_the_error_with_the_run_log(self):
+        result, calls = self.run_server("start", "vps", DISCORD="1", APPLY_FAIL="1",
+                                        GITHUB_RUN_ID="42", GITHUB_REPOSITORY="o/r")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.discord_posts(calls), [
+            "⚠️ The server start failed: tofu apply failed ([log](https://github.com/o/r/actions/runs/42))"])
+
+    def test_stop_posts_to_discord(self):
+        result, calls = self.run_server("stop", VPS="1", DISCORD="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.discord_posts(calls), ["🔴 The server is stopped and the world is backed up (from the laptop)"])
+
+    def test_failed_stop_posts_to_discord(self):
+        result, calls = self.run_server("stop", BACKUP_FAIL="1", VPS="1", DISCORD="1")
+        self.assertNotEqual(result.returncode, 0)
+        posts = self.discord_posts(calls)
+        self.assertEqual(len(posts), 1)
+        self.assertTrue(posts[0].startswith("⚠️ The server stop failed"), posts)
+
+    def test_no_discord_post_without_a_webhook(self):
+        result, calls = self.run_server("start", "vps")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.discord_posts(calls), [])
 
     def test_start_vps_sends_age_key_only_on_stdin(self):
         result, calls = self.run_server("start", "vps")

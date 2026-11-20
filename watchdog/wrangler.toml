@@ -20,5 +20,12 @@ WORKFLOW = "server.yml"
 binding = "STATE"
 id = "e69bbe1c5a8644db8c9688db1f3defb5"
 
+# The web app's bucket, read for vps.json: which server type runs, so the
+# uptime count is per type (Hetzner prices differ per type). `server web`
+# creates it.
+[[r2_buckets]]
+binding = "WEB"
+bucket_name = "mc-smp-web"
+
 [observability]
 enabled = true

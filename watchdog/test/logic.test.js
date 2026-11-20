@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decide, parseStatus, parseStatusDetails, readVarint, shouldDispatch, statusRequest, varint } from "../src/logic.js";
+import { addUsage, vpsType, decide, parseStatus, parseStatusDetails, readVarint, shouldDispatch, statusRequest, usageKey, varint } from "../src/logic.js";
 
 const HOUR = 3600;
 const config = { idleMinutes: 120, maxDays: 7 };
@@ -82,4 +82,29 @@ test("dispatches once, not while a run is in flight or right after a request", (
   assert.equal(shouldDispatch({}, 1, 1000), false);
   assert.equal(shouldDispatch({ last_dispatch: 1000 }, 0, 1000 + 29 * 60), false);
   assert.equal(shouldDispatch({ last_dispatch: 1000 }, 0, 1000 + 30 * 60), true);
+});
+
+test("usage is counted per UTC month", () => {
+  assert.equal(usageKey(Date.UTC(2026, 10, 30, 23, 59) / 1000), "usage:2026-11");
+  assert.equal(usageKey(Date.UTC(2026, 11, 1, 0, 0) / 1000), "usage:2026-12");
+});
+
+test("usage adds minutes per server type and remembers when counting started", () => {
+  const first = addUsage(null, 5, 1000, "cx33");
+  assert.deepEqual(first, { since: 1000, minutes: 5, by_type: { cx33: 5 } });
+  const second = addUsage(first, 5, 2000, "cpx32");
+  assert.deepEqual(second, { since: 1000, minutes: 10, by_type: { cx33: 5, cpx32: 5 } });
+  assert.deepEqual(addUsage(second, 5, 3000).by_type, { cx33: 5, cpx32: 5, unknown: 5 });
+});
+
+test("usage counted before types were keeps its total", () => {
+  assert.deepEqual(addUsage({ since: 1, minutes: 60 }, 5, 2, "cx33"), { since: 1, minutes: 65, by_type: { cx33: 5 } });
+});
+
+test("the type counts only for the VPS that DNS points at", () => {
+  const vps = { ipv4: ip, type: "cx33" };
+  assert.equal(vpsType(vps, ip), "cx33");
+  assert.equal(vpsType(vps, "192.0.2.99"), "unknown");
+  assert.equal(vpsType(null, ip), "unknown");
+  assert.equal(vpsType({ ipv4: ip, type: "../x" }, ip), "unknown");
 });

@@ -94,3 +94,35 @@ a { color: var(--accent); }
 	font-weight: 500;
 }
 .names img { border-radius: 4px; image-rendering: pixelated; }
+.hardware { font-size: 0.9rem; margin: 12px 0 8px; }
+.badge {
+	display: inline-block;
+	padding: 0 6px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 0.78rem;
+	line-height: 1.5;
+}
+.badge.op { border-color: var(--accent); color: var(--accent); }
+.player { display: flex; align-items: center; gap: 8px; }
+.player img { border-radius: 3px; image-rendering: pixelated; }
+dl.specs { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+dl.specs dt { color: var(--muted); }
+dl.specs dd { margin: 0; overflow-wrap: anywhere; }
+nav { display: flex; gap: 14px; }
+.boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 16px; }
+ol.ranking { list-style: none; padding: 0; margin: 0; }
+ol.ranking li {
+	display: grid;
+	grid-template-columns: 1.6em 1fr auto;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 0;
+	border-bottom: 1px solid var(--border);
+}
+ol.ranking li:last-child { border-bottom: 0; }
+ol.ranking .rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+ol.ranking li.first .rank { color: var(--accent); font-weight: 700; }
+ol.ranking .value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+ol.ranking .player { min-width: 0; overflow-wrap: anywhere; }

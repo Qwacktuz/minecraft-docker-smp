@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased: cheaper fallback types (2026-11-21)
+
+- `SERVER_TYPES` defaults to `cx33 cx43 cx53 cpx32`. At Hetzner's prices
+  (`web/wrangler.toml`: 0.0144, 0.0264, 0.0481 and 0.0489 €/h), `cx43` and
+  `cx53` are bigger and cheaper than `cpx32`. More cores and RAM don't change the
+  game's 5 GB heap. `cpx32` stays last, as a different family for when Hetzner
+  has run out of the CX ones. ARM types (`cax21`, `cax31`) aren't in the list
+  until the mods have been tested on ARM; their prices are already set.
+- `[vars.HOURLY_PRICES_EUR]` has the prices of all six types.
+
+## Unreleased: leaderboards (2026-11-20)
+
+- **https://smp.cactuz.dev/leaderboard**: top 10s for playtime, distance
+  travelled (every way of moving), elytra distance, blocks placed, blocks
+  mined, mobs killed and deaths, linked from the header.
+- `scripts/leaderboard.py` reads the game's per-player stats and, for blocks
+  placed, Ledger's database (read-only; rolled-back placements don't count).
+  Only whitelisted players and ops are listed, so Carpet bots stay out.
+  `publish-status.sh` publishes `leaderboard.json` to the web bucket at every
+  start and stop; a failure only warns.
+
+## Unreleased: Discord notifications, monthly usage, map link (2026-11-20)
+
+- **Discord** ([docs/notifications.md](docs/notifications.md)): with
+  `DISCORD_WEBHOOK_URL` in `secrets/infra.enc.env`, `bin/server` posts when a
+  start or stop finishes or fails (with the GitHub run's log link), and the
+  watchdog posts each auto-stop with its reason. Mentions are off; the URL
+  never appears in a command line.
+- **Usage**: the watchdog counts the minutes a VPS exists each month, per
+  server type (`usage:YYYY-MM` in KV; the type comes from `vps.json`, so the
+  watchdog now reads the web bucket). `/admin` shows this month's and last
+  month's hours per type, and a cost from each type's own hourly price in
+  `[vars.HOURLY_PRICES_EUR]` (`web/wrangler.toml`). Hours of an unknown or
+  unpriced type are shown, not priced.
+- `tests/test_prices.py` fails CI when a type in `SERVER_TYPES` (`bin/server`)
+  has no plausible price (a positive number under 1 €/h) in that table.
+- **The public page links the web map** (`MAP_URL`, `/map/index.html`) next to
+  the `world.zip` download.
+
+## Unreleased: hardware and whitelist on the web app (2026-11-20)
+
+- The public page says what the server runs on: "Hetzner CX33 · 4 vCPU · 8 GB
+  RAM · Helsinki (hel1)". `/admin` has a Hardware card (type, location, CPU
+  model, RAM and the game's heap, disk) and a Whitelist card (names, heads, op
+  levels, and ops who aren't whitelisted).
+- The VPS publishes them to the private web bucket with the backup list:
+  `scripts/web_status.py` writes `players.json` at every start and stop, and
+  `vps.json` at a start. The type and location come from new OpenTofu outputs
+  (`server_type`, `server_location`), so they're right after a fallback too.
+  Hardware only shows while DNS points at the VPS that wrote it.
+- `publish-status.sh` uploads with `rclone copy`; a file that couldn't be
+  written keeps its last version, and only the backup list is required.
+
+## Unreleased: the web app survives a failed DNS lookup (2026-11-20)
+
+- `/admin` (and the public page) sometimes answered 500 until a refresh. The
+  status check's DNS-over-HTTPS lookup threw on a network error, and nothing
+  caught it. Now it retries once, then falls back to the address the watchdog
+  last saw (Workers KV), and logs `dns-lookup-failed`. A fallback result isn't
+  cached, so the next load looks again.
+
 ## Unreleased: fall back to other locations too when Hetzner is sold out (2026-11-20)
 
 - `bin/server start` tries each of `SERVER_TYPES` in every location of
