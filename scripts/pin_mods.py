@@ -18,6 +18,10 @@ The comment keeps the human version and, in brackets, the allowed type, so a
 later run (to update the pins) still allows alpha versions. Commented-out
 entries are left alone. Required dependencies that aren't listed are reported:
 itzg pulls them in (MODRINTH_DOWNLOAD_DEPENDENCIES), unpinned, so add them.
+Mods that Modrinth marks as client-only (server_side: unsupported) and that no
+listed mod requires get a note: they may do nothing on a server. Notes never
+fail the run, because that metadata is sometimes wrong; a note "(works on the
+server)" on the entry silences it.
 """
 
 import argparse
@@ -75,8 +79,9 @@ def newest(versions, allowed):
 
 
 def pin(lines, game_version, fetch=get):
-    """Returns (new lines, problems, required project IDs not listed)."""
-    block, out, problems, listed, needed = False, [], [], set(), {}
+    """Returns (new lines, problems, listed project IDs {id: slug},
+    required project IDs {id: the first listed slug that requires it})."""
+    block, out, problems, listed, needed = False, [], [], {}, {}
     for line in lines:
         if re.match(r"^\s*MODRINTH_PROJECTS:\s*\|", line):
             block = True
@@ -97,15 +102,14 @@ def pin(lines, game_version, fetch=get):
             problems.append(f"{slug}: no {allowed}-or-better {loader} version for {game_version}; left as is")
             out.append(line)
             continue
-        listed.add(chosen["project_id"])
+        listed[chosen["project_id"]] = None if "works on the server" in note else slug
         for dependency in chosen.get("dependencies", []):
             if dependency.get("dependency_type") == "required" and dependency.get("project_id"):
                 needed.setdefault(dependency["project_id"], slug)
         tag = f" [{allowed}]" if allowed != "release" else ""
         extra = f" ({note})" if note else ""
         out.append(f"{indent}{prefix}{slug}:{chosen['id']} # {chosen['version_number']}{tag}{extra}\n")
-    missing = {project: by for project, by in needed.items() if project not in listed}
-    return out, problems, missing
+    return out, problems, listed, needed
 
 
 def game_version_of(lines):
@@ -140,16 +144,21 @@ def main(argv=None, fetch=get):
     args = parser.parse_args(argv)
     lines = args.compose.read_text().splitlines(keepends=True)
     game_version = args.game_version or game_version_of(lines)
-    out, problems, missing = pin(lines, game_version, fetch)
+    out, problems, listed, needed = pin(lines, game_version, fetch)
+    missing = {project: by for project, by in needed.items() if project not in listed}
     out, loader_problems = pin_loader(out, game_version, fetch)
     problems += loader_problems
     for problem in problems:
         print(f"warning: {problem}", file=sys.stderr)
-    if missing:
-        projects = fetch("projects", {"ids": json.dumps(sorted(missing))})
-        for project in projects:
+    projects = fetch("projects", {"ids": json.dumps(sorted({*listed, *missing}))}) if listed or missing else []
+    for project in projects:
+        if project["id"] in missing:
             print(f"warning: {project['slug']} is a required dependency of {missing[project['id']]} "
                   "but not listed; itzg downloads it unpinned. Add it and run again.", file=sys.stderr)
+        elif (project.get("server_side") == "unsupported" and project["id"] not in needed
+              and listed.get(project["id"])):
+            print(f"note: {listed[project['id']]} is client-only on Modrinth and no listed mod requires it; "
+                  "remove it unless it is known to work on the server.", file=sys.stderr)
     if args.write:
         args.compose.write_text("".join(out))
     else:

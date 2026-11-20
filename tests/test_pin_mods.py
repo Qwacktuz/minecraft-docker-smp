@@ -53,6 +53,16 @@ VERSIONS = {
 }
 
 
+# Modrinth's server_side: P4 (balm) is client-only and unrequired; P1 (fabric-api)
+# is marked client-only too, but servercore requires it.
+PROJECTS = {
+    "P1": {"id": "P1", "slug": "fabric-api", "server_side": "unsupported"},
+    "P4": {"id": "P4", "slug": "balm", "server_side": "unsupported"},
+    "P3": {"id": "P3", "slug": "servercore", "server_side": "required"},
+    "P9": {"id": "P9", "slug": "hidden-lib", "server_side": "required"},
+}
+
+
 class FakeApi:
     def __init__(self):
         self.calls = []
@@ -63,7 +73,7 @@ class FakeApi:
             return [{"loader": {"version": "0.21.0", "stable": False}},
                     {"loader": {"version": "0.20.1", "stable": True}}]
         if path == "projects":
-            return [{"id": "P9", "slug": "hidden-lib"}]
+            return [PROJECTS[id] for id in json.loads(query["ids"]) if id in PROJECTS]
         return VERSIONS.get(path.split("/")[1], [])
 
 
@@ -116,6 +126,17 @@ class PinModsTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("gone-mod: no release-or-better fabric version", err)
         self.assertIn("        gone-mod\n", text)
+
+    def test_notes_client_only_mods_that_nothing_requires(self):
+        code, _, _, err, _ = self.run_pin(COMPOSE, "--write")
+        self.assertEqual(code, 0, err)  # a note never fails the run
+        self.assertIn("note: balm is client-only on Modrinth", err)
+        self.assertNotIn("note: fabric-api", err)  # servercore requires it
+        self.assertNotIn("note: servercore", err)
+        self.assertNotIn("note: hidden-lib", err)  # reported as missing instead
+        quiet = COMPOSE.replace("balm # soft dependency", "balm # (works on the server)")
+        _, _, _, err, _ = self.run_pin(quiet, "--write")
+        self.assertNotIn("note: balm", err)
 
     def test_dry_run_prints_changes_only(self):
         code, text, out, _, _ = self.run_pin(COMPOSE)
