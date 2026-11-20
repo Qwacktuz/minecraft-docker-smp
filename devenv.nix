@@ -24,7 +24,7 @@
     rclone
     restic
 
-    # The idle auto-stop Worker (watchdog/): deployed with `server watchdog`
+    # The Workers: watchdog/ (`server watchdog`) and the web app web/ (`server web`)
     nodejs
     wrangler
 
@@ -60,6 +60,7 @@
       actionlint
       python3 -m unittest discover -s tests
       (cd watchdog && node --test && WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --outdir "$(mktemp -d)" >/dev/null)
+      (cd web && npm ci --no-audit --no-fund && npm run check && npm test && npm run build >/dev/null)
       tofu -chdir=infra fmt -check
       tofu -chdir=infra init -backend=false -lockfile=readonly >/dev/null
       tofu -chdir=infra validate

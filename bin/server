@@ -13,6 +13,7 @@
 #   bin/server vault         copy the backups into the locked vault bucket now
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
 #   bin/server watchdog      deploy the idle auto-stop Worker (watchdog/, Cloudflare)
+#   bin/server web           deploy the web app (web/, Cloudflare): status page + admin
 #
 # Backups (read-only; they work from the laptop with no VPS):
 #   bin/server backups [--vault]        list the snapshots with their dates and tags
@@ -320,6 +321,9 @@ APP_DIR="$HOME/app" RESTORE="$RESTORE" BACKUPS=1 bash scripts/deploy.sh'
   remote "$(printf 'REPO=%q SHA=%q RESTORE=%q bash -c %q' "$REPO" "$sha" "$restore" "$script")" \
     < <(grep '^AGE-SECRET-KEY-' "$AGE_KEY_FILE")
 
+  # The backup list for the web app (web/); never blocks the start.
+  on vps "bash scripts/publish-status.sh" ||
+    echo "warning: could not publish backups.json for the web app" >&2
   say "Running on the VPS: mc.cactuz.dev ($(tf output -raw ipv4_address))"
 }
 
@@ -363,6 +367,8 @@ stop() {
   # A public download of the world (no player data); never blocks the stop.
   on vps "bash scripts/publish-world.sh" ||
     echo "warning: could not publish world.zip; the backup in R2 is safe" >&2
+  on vps "bash scripts/publish-status.sh" ||
+    echo "warning: could not publish backups.json for the web app" >&2
 
   say "Deleting the VPS..."
   remote "sudo tailscale logout" 2>/dev/null || true
@@ -400,6 +406,29 @@ watchdog_deploy() {
   wrangler deploy
   # The token goes to wrangler on stdin, never in its arguments.
   printf '%s' "$WATCHDOG_GITHUB_TOKEN" | wrangler secret put GITHUB_TOKEN
+}
+
+# Builds and deploys the web app (web/) to Cloudflare with wrangler. Runs under
+# `secrets all`, like watchdog_deploy: the same Cloudflare token (plus R2 Edit
+# for the WEB bucket), and WEB_GITHUB_TOKEN (Actions: read and write on this
+# repository only) becomes its one secret. docs/web.md.
+# shellcheck disable=SC2154,SC2031 # R2_ENDPOINT and WATCHDOG_*/WEB_* come from sops exec-env
+web_deploy() {
+  need npm wrangler
+  [[ -n "${WATCHDOG_CLOUDFLARE_TOKEN:-}" && -n "${WEB_GITHUB_TOKEN:-}" ]] ||
+    die "add WATCHDOG_CLOUDFLARE_TOKEN and WEB_GITHUB_TOKEN to secrets/infra.enc.env (docs/web.md)"
+  local account=${R2_ENDPOINT#https://}
+  account=${account%%.*}
+  [[ "$account" =~ ^[0-9a-f]{32}$ ]] || die "could not read the Cloudflare account ID from R2_ENDPOINT"
+  export CLOUDFLARE_ACCOUNT_ID=$account CLOUDFLARE_API_TOKEN=$WATCHDOG_CLOUDFLARE_TOKEN
+  cd "$ROOT/web"
+  ! grep -q REPLACE_WITH wrangler.toml ||
+    die "set ACCESS_TEAM_DOMAIN and ACCESS_AUD in web/wrangler.toml first (docs/web.md)"
+  npm ci --no-audit --no-fund
+  npm run build
+  wrangler r2 bucket info mc-smp-web >/dev/null 2>&1 || wrangler r2 bucket create mc-smp-web
+  wrangler deploy
+  printf '%s' "$WEB_GITHUB_TOKEN" | wrangler secret put GITHUB_TOKEN
 }
 
 # Deletes tailnet devices named $1 via the Tailscale API. Runs under
@@ -673,6 +702,7 @@ case "${1:-} ${2:-}" in
   "prune "*) prune "${2:-}" ;;
   "vault "*) vault ;;
   "watchdog "*) say "Deploying the idle auto-stop Worker..."; secrets all _watchdog-deploy ;;
+  "web "*) say "Deploying the web app..."; secrets all _web-deploy ;;
   "tofu "*) shift; tf_init; tf "$@" ;;
   "backups "*) backups "${2:-}" ;;
   "check "*) shift; check "$@" ;;
@@ -688,6 +718,7 @@ case "${1:-} ${2:-}" in
   "_pause-alerts "*) pause_alerts ;;
   "_forget-device "*) forget_device "$2" ;;
   "_watchdog-deploy "*) watchdog_deploy ;;
+  "_web-deploy "*) web_deploy ;;
   "_restic "*) shift; restic "$@" ;;
   "_check "*) RESTIC_NO_LOCK=1 APP_DIR="$ROOT" bash "$ROOT/scripts/test-backup.sh" "$2" ;;
   "_deploy "*) bash "$ROOT/scripts/deploy.sh" ;;

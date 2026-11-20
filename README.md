@@ -65,6 +65,12 @@ it down. Whatever you do locally is never uploaded and is replaced by the next
 restore. Restores only consider snapshots from the VPS backup host
 (`mc-backup-worker`), so nothing else in the repository can become "latest".
 
+**A web page:** **https://smp.cactuz.dev** shows whether the server is up, who's
+online, when it will stop itself, and the world download. Admins sign in at
+`/admin` (Cloudflare Access) to start or stop it, follow the run step by step, and
+see the backups. It runs the same GitHub workflow as the button above. Setup and
+local development: [docs/web.md](docs/web.md).
+
 **Pruning** deletes chunks nobody spent time in, while keeping builds, player
 homes, recent activity and a buffer around them. It can also run automatically
 every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pruning.md).
@@ -204,6 +210,9 @@ tests use mocks and dummy credentials.
 - `bin/server`, `scripts/deploy.sh`: start/stop and deployment.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
+- `scripts/publish-status.sh`: `backups.json` for the web app.
+- `web/`: the web app (SvelteKit on a Cloudflare Worker), `server web` deploys it.
+- `watchdog/`: the idle auto-stop Worker; `watchdog/src/minecraft.js` is shared with `web/`.
 - `scripts/restore.sh` (`world`, `regions`, `rollback`) and
   `scripts/test-backup.sh`: backup tools, run on the app host by hand or by
   `server restore` / `server check`. They share `scripts/lib.sh` (pinned images,

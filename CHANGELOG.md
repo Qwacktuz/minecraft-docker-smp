@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased: a web app (2026-11-20)
+
+- **`web/`: a SvelteKit app on a Cloudflare Worker at smp.cactuz.dev.** The
+  public page shows the server's state, players online, the time until the idle
+  auto-stop, and the `world.zip` link. `/admin`, behind Cloudflare Access, has
+  Start/Stop (the same Server workflow on `main`), the runs with live steps, and
+  the backup list. Deploy with `server web`; setup in `docs/web.md`.
+- The watchdog's DNS, ping and GitHub code moved to `watchdog/src/minecraft.js`
+  so the web app shares it. The watchdog behaves the same.
+- `scripts/publish-status.sh` uploads `backups.json` (snapshot IDs, times, tags)
+  at every start and stop, when `WEB_BUCKET` is set. `snapshots.py --json` makes it.
+- Server workflow runs are titled "Server start" / "Server stop".
+- `validate` also type-checks, tests and builds `web/`.
+
 ## Unreleased: the idle auto-stop moves to a Cloudflare Worker (2026-11-20)
 
 - GitHub's scheduled workflow ran once in ten hours, so the idle auto-stop

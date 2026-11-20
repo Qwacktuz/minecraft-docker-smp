@@ -8,11 +8,17 @@ printed an error instead of JSON.
 
 Prints the full ID of the one snapshot whose ID starts with the prefix (or the
 newest one). Exits 1 when none or several match.
+
+    restic snapshots --json | snapshots.py --json
+
+Prints {"updated": <epoch>, "snapshots": [{"id", "time", "tags"}, ...]}, newest
+first: backups.json for the web app (scripts/publish-status.sh).
 """
 
 import json
 import re
 import sys
+from time import time as unix_now
 from datetime import datetime
 
 
@@ -36,7 +42,14 @@ def find(snapshots, wanted):
     return matches.pop() if len(matches) == 1 else None
 
 
-def main(stdin=sys.stdin, stdout=sys.stdout, argv=()):
+def summary(snapshots, now):
+    """The web app's backups.json: IDs, times and tags, newest first."""
+    rows = sorted(({"id": s["id"], "time": epoch(s["time"]), "tags": s.get("tags") or []} for s in snapshots),
+                  key=lambda row: row["time"], reverse=True)
+    return {"updated": now, "snapshots": rows}
+
+
+def main(stdin=sys.stdin, stdout=sys.stdout, argv=(), now=None):
     try:
         data = json.load(stdin)
         if len(argv) == 2 and argv[0] == "--find":
@@ -44,6 +57,10 @@ def main(stdin=sys.stdin, stdout=sys.stdout, argv=()):
             if found is None:
                 return 1
             print(found, file=stdout)
+            return 0
+        if list(argv) == ["--json"]:
+            json.dump(summary(data, int(unix_now()) if now is None else now), stdout)
+            print(file=stdout)
             return 0
         if argv:
             print(__doc__.strip(), file=sys.stderr)

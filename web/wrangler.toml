@@ -1,0 +1,34 @@
+# The SMP web app (SvelteKit, built by @sveltejs/adapter-cloudflare).
+# Deploy with `server web`. No `main`: the adapter sets the Worker entry itself.
+name = "mc-smp-web"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_als"]
+workers_dev = false
+
+routes = [{ pattern = "smp.cactuz.dev", custom_domain = true }]
+
+[vars]
+HOST = "mc.cactuz.dev"
+PORT = "25565"
+IDLE_MINUTES = "120"                   # keep in sync with watchdog/wrangler.toml
+MAX_DAYS = "14"
+REPO = "Qwacktuz/minecraft-docker-smp"
+WORKFLOW = "server.yml"
+WORLD_URL = "https://world.cactuz.dev/world.zip"
+# Cloudflare Access in front of /admin (docs/web.md). Both are public values.
+ACCESS_TEAM_DOMAIN = "REPLACE_WITH_TEAM.cloudflareaccess.com"
+ACCESS_AUD = "REPLACE_WITH_ACCESS_AUD"
+
+# The watchdog's state (watchdog/wrangler.toml): up since, last busy, last stop
+# request. The web app only reads it.
+[[kv_namespaces]]
+binding = "STATE"
+id = "e69bbe1c5a8644db8c9688db1f3defb5"
+
+# backups.json, written by scripts/publish-status.sh on the VPS.
+[[r2_buckets]]
+binding = "WEB"
+bucket_name = "mc-smp-web"
+
+[observability]
+enabled = true

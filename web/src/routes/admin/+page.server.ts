@@ -1,0 +1,35 @@
+import { fail } from '@sveltejs/kit';
+import { dispatch, runsInFlight } from '../../../../watchdog/src/minecraft.js';
+import { env } from '#lib/server/env.ts';
+import { getBackups } from '#lib/server/backups.ts';
+import { getRuns } from '#lib/server/runs.ts';
+import { getStatus } from '#lib/server/status.ts';
+import type { Actions, PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ locals }) => {
+	const [status, runs, backups] = await Promise.all([
+		getStatus(env),
+		getRuns(env).catch((e: Error) => e.message),
+		getBackups(env).catch(() => null)
+	]);
+	return { admin: locals.admin, status, runs, backups, host: env.HOST };
+};
+
+// Start/stop run the same GitHub workflow as the "Run workflow" button and the
+// watchdog: bin/server on a runner, always from main.
+async function run(action: 'start' | 'stop', admin?: string) {
+	try {
+		if ((await runsInFlight(env)) > 0)
+			return fail(409, { message: 'A start or stop is already running; wait for it to finish.' });
+		await dispatch(env, action);
+	} catch (e) {
+		return fail(502, { message: (e as Error).message });
+	}
+	console.log(JSON.stringify({ event: 'dispatch', action, admin }));
+	return { message: `Requested a ${action}. It shows up below in a few seconds.` };
+}
+
+export const actions: Actions = {
+	start: ({ locals }) => run('start', locals.admin),
+	stop: ({ locals }) => run('stop', locals.admin)
+};

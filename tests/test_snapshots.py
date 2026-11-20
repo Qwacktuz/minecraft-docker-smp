@@ -34,6 +34,22 @@ class SnapshotsTests(unittest.TestCase):
         self.assertEqual([line.split()[1] for line in out.splitlines()], ["new", "mid", "old"])
         self.assertEqual(out.splitlines()[0], "1795086000 new")
 
+    def test_json_summary_for_the_web_app(self):
+        snaps = [{"id": "old", "time": "2026-11-17T12:00:00Z"},
+                 {"id": "new", "time": "2026-11-19T12:00:00Z", "tags": ["pre-prune"]}]
+        out = io.StringIO()
+        code = snapshots.main(io.StringIO(json.dumps(snaps)), out, ["--json"], now=1795100000)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out.getvalue()), {
+            "updated": 1795100000,
+            "snapshots": [{"id": "new", "time": 1795089600, "tags": ["pre-prune"]},
+                          {"id": "old", "time": 1794916800, "tags": []}]})
+
+    def test_json_summary_of_no_snapshots_is_empty(self):
+        out = io.StringIO()
+        self.assertEqual(snapshots.main(io.StringIO("[]"), out, ["--json"], now=1), 0)
+        self.assertEqual(json.loads(out.getvalue())["snapshots"], [])
+
     def test_invalid_json_and_no_snapshots_fail(self):
         for text in ("Fatal: unable to open repository", "", "[]"):
             with self.subTest(text=text):

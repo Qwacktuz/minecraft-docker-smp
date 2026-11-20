@@ -1,4 +1,5 @@
 name: Server
+run-name: Server ${{ inputs.action }}
 
 # Start or stop the VPS from GitHub, and stop it when nobody plays.
 # It runs bin/server, exactly like the laptop, so the two never drift apart.
