@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased: web map, grief logs, anti-xray, mod configs in Git (2026-11-20)
+
+- **Mod configs in Git** (`config/`): copied over the world's at every start,
+  and Git's copy wins (`SYNC_SKIP_NEWER_IN_DESTINATION: false`). Only the files
+  in `config/` are managed; every other config stays as the world has it.
+- **Web map at https://world.cactuz.dev/map/** (BlueMap). It renders on the
+  VPS, and `server stop` publishes it as static files to the public world
+  bucket (`scripts/publish-map.sh`), so it stays online while the VPS is off.
+  After a restore, `deploy.sh` pulls it back, so only changed chunks are
+  rendered again. BlueMap's web server is off and no port is opened. See
+  [docs/map.md](docs/map.md).
+- **Ledger** grief logs (`/lg`): kept 90 days, in the backups, not in `world.zip`.
+- **Meow Anti-Xray**: hides unexposed ores (engine mode 1). DrexHD's AntiXray
+  doesn't start alongside Fast Noise (`zfastnoise`).
+- **Krypton** (network), and ServerCore's **dynamic distances**: only under load
+  (ticks over 35 ms) does simulation distance drop to 6, then view distance to 8.
+- Mod list cleanup: Balm removed (nothing used it); the commented
+  fabric-permissions-api (bundled by LuckPerms) and Axiom entries removed.
+  `pin_mods.py` notes mods that Modrinth marks client-only and nothing requires.
+- `scripts/smoke-test.sh` boots the mod list on a fresh, throwaway world and
+  fails on mod-loading errors. `lib.sh` gets `r2_rclone`, used by both
+  publish scripts and the map pull.
+
 ## Unreleased: the idle auto-stop moves to a Cloudflare Worker (2026-11-20)
 
 - GitHub's scheduled workflow ran once in ten hours, so the idle auto-stop
