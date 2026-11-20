@@ -1,0 +1,310 @@
+name: Live test (restore, rollback, region restore)
+
+# TEMPORARY: a one-night live test of `bin/server restore`, `rollback` and
+# `restore --region` on the real VPS. Deleted again right after the test:
+# restores stay admin-only and are never part of the GitHub workflows.
+#
+# It only starts the VPS when nothing is running, restores the NEWEST snapshot
+# (so the world can't change even if rollback is broken), and always ends with
+# `bin/server stop`. Logs are public: only bin/server subcommands and
+# hash/listing commands run; no set -x, no env dumps.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # -eo pipefail
+
+jobs:
+  live:
+    name: Live test
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: prod
+    # The same group as server.yml: an idle stop waits until this test is done.
+    concurrency:
+      group: server
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # Tailscale login with GitHub's OIDC token
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # bin/server checks that the commit is on GitHub
+
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ vars.TS_CLIENT_ID }}
+          audience: ${{ vars.TS_AUDIENCE }}
+          tags: tag:ci
+
+      - name: Reach the VPS by its Tailscale name
+        run: |
+          mkdir -p ~/.ssh
+          printf 'Host mc-prod\n  ProxyCommand tailscale nc %%h %%p\n' >> ~/.ssh/config
+
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (the version used locally)
+        run: nix profile add github:cachix/devenv/v2.4.0
+
+      - name: Write the CI Age key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          : "${SOPS_AGE_KEY:?the prod environment has no SOPS_AGE_KEY secret}"
+          umask 077
+          printf '%s\n' "$SOPS_AGE_KEY" > "$RUNNER_TEMP/age.txt"
+          echo "SOPS_AGE_KEY_FILE=$RUNNER_TEMP/age.txt" >> "$GITHUB_ENV"
+
+      # Defence in depth: GitHub doesn't know the decrypted values, so register
+      # them as masks. Nothing is printed; ::add-mask:: lines are not shown.
+      - name: Mask the decrypted values
+        run: |
+          devenv shell sops -d --output-type dotenv secrets/app.enc.env > "$RUNNER_TEMP/m" 2>/dev/null
+          devenv shell sops -d --output-type dotenv secrets/infra.enc.env >> "$RUNNER_TEMP/m" 2>/dev/null
+          while IFS= read -r line; do
+            value=${line#*=}
+            if (( ${#value} >= 6 )); then echo "::add-mask::$value"; fi
+          done < "$RUNNER_TEMP/m"
+          found=$(grep -c '^R2_ENDPOINT=' "$RUNNER_TEMP/m" || true)
+          rm -f "$RUNNER_TEMP/m"
+          (( found == 1 )) || { echo "::error::could not decrypt the secrets"; exit 1; }
+
+      - name: Helpers
+        run: |
+          cat > "$RUNNER_TEMP/live.sh" <<'EOF'
+          # shellcheck shell=bash
+          T=$RUNNER_TEMP/live
+          mkdir -p "$T"
+          server() { devenv shell bin/server "$@"; }
+          # The same SSH options as bin/server remote().
+          vps() {
+            ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR \
+                -o ConnectTimeout=10 deployer@mc-prod "cd ~/app && $*"
+          }
+          FILES=()
+          for x in -1 0 1; do for z in -1 0 1; do
+            FILES+=("world/dimensions/minecraft/overworld/region/r.$x.$z.mca")
+          done; done
+          FILES+=(world/dimensions/minecraft/the_nether/region/r.0.0.mca
+                  world/dimensions/minecraft/the_end/region/r.0.0.mca)
+          result() { echo "| $1 | $2 |" >> "$T/results.md"; }
+          no_players() {
+            local out
+            out=$(vps "docker compose exec -T minecraft-service rcon-cli list") ||
+              { echo "::error::could not ask the game who is online"; return 1; }
+            echo "$out"
+            [[ "$out" == "There are 0 "* ]] || { echo "::error::someone is online; not touching the world"; return 1; }
+          }
+          healthy() {
+            local ps
+            ps=$(vps "docker compose ps --format '{{.Service}} {{.State}} {{.Health}}'")
+            echo "$ps"
+            grep -q '^minecraft-service running healthy' <<< "$ps" && grep -q '^backup running' <<< "$ps"
+          }
+          # `hashes <label>`: sha256 and mtime of FILES on the VPS disk.
+          hashes() {
+            local script='cd /d && for f; do if [ -f "$f" ]; then echo "$(sha256sum "$f" | cut -c1-64) $(stat -c %Y "$f") $f"; else echo "missing - $f"; fi; done'
+            vps ". scripts/lib.sh && docker run --rm -v \"\$PWD/data/minecraft:/d:ro\" \"\$ALPINE_IMAGE\" sh -c $(printf %q "$script") sh ${FILES[*]}" > "$T/$1.txt"
+            echo "--- $1"; cat "$T/$1.txt"
+          }
+          # `snapshot_hashes <id>`: sha256 of FILES inside a snapshot (restic dump).
+          snapshot_hashes() {
+            local f h
+            : > "$T/snapshot.txt"
+            for f in "${FILES[@]}"; do
+              if h=$(vps "docker compose exec -T backup restic --no-lock dump $1 /data/$f" 2>/dev/null | sha256sum | cut -c1-64) &&
+                 [[ "$h" != e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ]]; then
+                echo "$h - $f" >> "$T/snapshot.txt"
+              else
+                echo "missing - $f" >> "$T/snapshot.txt"
+              fi
+            done
+            echo "--- snapshot ${1:0:8}"; cat "$T/snapshot.txt"
+          }
+          # `same <a> <b>`: the hashes of two lists match (mtimes ignored).
+          same() { diff <(cut -d' ' -f1,3 "$T/$1.txt") <(cut -d' ' -f1,3 "$T/$2.txt"); }
+          EOF
+          echo "| Step | Result |" > "$RUNNER_TEMP/results.head"
+
+      - name: "0. Nothing may be running"
+        id: guard
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          echo "T0=$(date -u +%s)" >> "$GITHUB_ENV"
+          dns=$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import idle_check; print(idle_check.vps_address("mc.cactuz.dev"))')
+          [[ "$dns" == None ]] || { echo "::error::mc.cactuz.dev has a DNS record: a VPS may be running"; exit 1; }
+          server status | tee "$T/status0.txt"
+          grep -q 'Stopped (the world is in R2)' "$T/status0.txt" ||
+            { echo "::error::something is running; this test never touches a server it didn't start"; exit 1; }
+          echo "clean=true" >> "$GITHUB_OUTPUT"
+          result "0. nothing running before the test" pass
+
+      - name: "1a. Newest snapshot before the start (bin/server backups)"
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          server backups | tee "$T/backups.txt"
+          s8=$(grep -Eo '^[0-9a-f]{8} ' "$T/backups.txt" | tail -n1 | tr -d ' ')
+          [[ -n "$s8" ]] || { echo "::error::no snapshot listed"; exit 1; }
+          echo "S8=$s8" >> "$GITHUB_ENV"
+          result "1a. \`backups\` lists the newest snapshot" "pass ($s8)"
+
+      - name: "1. bin/server start vps"
+        timeout-minutes: 20
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          echo "VPS_START=$(date -u +%s)" >> "$GITHUB_ENV"
+          server start vps
+          healthy
+          result "1. start vps" pass
+
+      - name: "1b. The snapshot the start restored (S)"
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          vps "docker compose exec -T backup restic --no-lock snapshots --host mc-backup-worker --json" |
+            python3 scripts/snapshots.py > "$T/snaps.txt"
+          s=$(awk -v t0="$T0" '$1 < t0 { print $2; exit }' "$T/snaps.txt")
+          [[ "$s" == "$S8"* ]] || { echo "::error::newest snapshot before the start is ${s:0:8}, backups listed $S8"; exit 1; }
+          echo "S=$s" >> "$GITHUB_ENV"
+          echo "S = $s"
+          result "1b. S = newest snapshot" "pass (${s:0:8})"
+
+      - name: "2. Anyone online?"
+        id: players
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          if no_players; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"; result "2. no players online" pass
+          else
+            result "2. no players online" "FAIL: skipping the restores"
+          fi
+
+      - name: "3. Checksums before (disk, and inside S)"
+        if: steps.players.outputs.ok == 'true'
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          vps "df -h ~/app | tail -n1"
+          hashes before
+          snapshot_hashes "$S"
+          cp "$T/snapshot.txt" "$T/S.txt"
+          if same before S; then note="disk = S"; else note="disk differs from S (the game saved since the start)"; fi
+          result "3. checksums recorded" "pass ($note)"
+
+      - name: "4. bin/server restore S --yes"
+        id: restore
+        if: steps.players.outputs.ok == 'true'
+        timeout-minutes: 15
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          no_players
+          server restore "$S" --yes 2>&1 | tee "$T/restore.log"
+          safety=$(grep -Eo 'Safety backup: [0-9a-f]{8}' "$T/restore.log" | tail -n1 | cut -d' ' -f3)
+          grep -q "Restored ${S:0:8}\." "$T/restore.log"
+          vps "docker compose exec -T backup restic --no-lock snapshots --host mc-backup-worker --tag pre-restore --json" |
+            python3 scripts/snapshots.py > "$T/tagged4.txt"
+          cat "$T/tagged4.txt"
+          head -n1 "$T/tagged4.txt" | grep -q " $safety" ||
+            { echo "::error::safety backup $safety is not the newest pre-restore snapshot"; exit 1; }
+          vps "ls -d data/minecraft_pre_restore_*"
+          healthy
+          server status
+          hashes after4
+          echo "SAFE4=$safety" >> "$GITHUB_ENV"
+          if same after4 S; then note="disk = S"; else note="disk differs from S"; fi
+          result "4. restore S" "pass (safety backup $safety tagged pre-restore, healthy, $note)"
+
+      - name: "5. bin/server rollback --yes"
+        id: rollback
+        if: steps.restore.outcome == 'success'
+        timeout-minutes: 15
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          no_players
+          server rollback --yes 2>&1 | tee "$T/rollback.log"
+          grep -q "Restoring $SAFE4\.\.\." "$T/rollback.log" ||
+            { echo "::error::rollback did not restore the safety backup $SAFE4"; exit 1; }
+          grep -q "Restored $SAFE4\." "$T/rollback.log"
+          safety=$(grep -Eo 'Safety backup: [0-9a-f]{8}' "$T/rollback.log" | tail -n1 | cut -d' ' -f3)
+          [[ -n "$safety" && "$safety" != "$SAFE4" ]]
+          healthy
+          hashes after5
+          result "5. rollback" "pass (restored $SAFE4; its own safety backup $safety; healthy)"
+
+      - name: "6. bin/server restore S --region (overworld, nether, end)"
+        if: steps.rollback.outcome == 'success'
+        timeout-minutes: 20
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          run() {
+            local log=$1; shift
+            no_players
+            server restore "$S" --region "$@" --yes 2>&1 | tee "$T/$log.log"
+            grep -q "Restored .* region file(s) from ${S:0:8}\." "$T/$log.log"
+            healthy
+          }
+          run ow overworld 0 0 512
+          diff <(grep -Eo '^  world/.*' "$T/ow.log" | sed 's/^  //' | sort) <(printf '%s\n' "${FILES[@]:0:9}" | sort)
+          run nether nether 0 0
+          diff <(grep -Eo '^  world/.*' "$T/nether.log" | sed 's/^  //') <(echo "${FILES[9]}")
+          run end end 0 0
+          diff <(grep -Eo '^  world/.*' "$T/end.log" | sed 's/^  //') <(echo "${FILES[10]}")
+          hashes after6
+          paste -d' ' <(cut -d' ' -f1,3 "$T/S.txt") <(cut -d' ' -f1 "$T/after6.txt") <(cut -d' ' -f1 "$T/before.txt") |
+            awk '{ printf "%s S=%.12s after=%.12s before=%.12s %s\n", $2, $1, $3, $4, ($1 == $3 ? "EQUAL" : "DIFFERENT") }' |
+            tee "$T/compare.txt"
+          if grep -q DIFFERENT "$T/compare.txt"; then
+            echo "::error::some restored region files differ from S"
+            result "6. region restore" "FAIL (checksums differ, see log)"; exit 1
+          fi
+          result "6. region restore" "pass (9 + 1 + 1 files listed; all checksums = S; healthy)"
+
+      - name: Results
+        if: always()
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          { cat "$RUNNER_TEMP/results.head"; echo "| --- | --- |"; cat "$T/results.md" 2>/dev/null || true
+            if [[ -f "$T/compare.txt" ]]; then echo; echo '```'; cat "$T/compare.txt"; echo '```'; fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Runs whatever happened above, but only when this run started the VPS.
+      - name: "7. bin/server stop (always)"
+        if: always() && steps.guard.outputs.clean == 'true'
+        timeout-minutes: 35
+        run: |
+          . "$RUNNER_TEMP/live.sh"
+          ok='' how=stop
+          for try in 1 2; do
+            if server stop 2>&1 | tee "$T/stop$try.log"; then ok=1; break; fi
+            echo "::warning::stop attempt $try failed"
+            sleep 60
+          done
+          if [[ -z "$ok" ]]; then
+            if grep -q 'integrity check' "$T"/stop*.log; then
+              echo "::error::the backups failed their integrity check; leaving the VPS running"; exit 1
+            fi
+            # The test world is disposable: it is S, and every state it went
+            # through is a snapshot in R2.
+            echo "::warning::stop failed twice; destroying the test VPS directly"
+            server tofu destroy -input=false -auto-approve
+            how="tofu destroy"
+          fi
+          server status | tee "$T/final.txt"
+          grep -q 'Stopped (the world is in R2)' "$T/final.txt" ||
+            { echo "::error::the VPS still exists"; exit 1; }
+          if [[ -n "${VPS_START:-}" ]]; then
+            echo "VPS runtime: about $(( ($(date -u +%s) - VPS_START) / 60 )) minutes"
+          fi
+          echo "| 7. stop | pass ($how; status: Stopped) |" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the Age key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/age.txt"
