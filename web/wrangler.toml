@@ -16,8 +16,8 @@ REPO = "Qwacktuz/minecraft-docker-smp"
 WORKFLOW = "server.yml"
 WORLD_URL = "https://world.cactuz.dev/world.zip"
 # Cloudflare Access in front of /admin (docs/web.md). Both are public values.
-ACCESS_TEAM_DOMAIN = "REPLACE_WITH_TEAM.cloudflareaccess.com"
-ACCESS_AUD = "REPLACE_WITH_ACCESS_AUD"
+ACCESS_TEAM_DOMAIN = "cactuz.cloudflareaccess.com"
+ACCESS_AUD = "0ab0f239fdb291bc56c9b2c29416eef1730d15f67314a7469adbb4a19d2b2ad7"
 
 # The watchdog's state (watchdog/wrangler.toml): up since, last busy, last stop
 # request. The web app only reads it.
