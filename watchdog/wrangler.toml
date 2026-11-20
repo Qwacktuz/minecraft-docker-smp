@@ -18,7 +18,7 @@ WORKFLOW = "server.yml"
 # When the VPS was first seen, when someone was last online, the last stop request.
 [[kv_namespaces]]
 binding = "STATE"
-id = "REPLACE_WITH_KV_ID"
+id = "e69bbe1c5a8644db8c9688db1f3defb5"
 
 [observability]
 enabled = true
