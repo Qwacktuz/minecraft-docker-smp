@@ -18,6 +18,22 @@ server prune             # back up, then delete unused chunks on the VPS
 server tofu plan         # run OpenTofu by hand with the encrypted credentials
 ```
 
+Backups, from the laptop with no VPS needed (read-only):
+
+```bash
+server backups [--vault]          # list the snapshots: ID, time, tags
+server check [percent] [--vault]  # restic integrity check, reading 5% of the data
+server drill [id]                 # restore a local copy from the vault, start it, stop it
+```
+
+Restores, for admins on the laptop (never from GitHub):
+
+```bash
+server restore <id>              # VPS: safety backup, then restore <id>; else a local read-only copy
+server restore <id> --region overworld <x> <z> [radius]   # only the region files around x, z
+server rollback                  # restore the safety backup (starts the VPS if it's off)
+```
+
 (`server` is `bin/server`, on PATH inside the devenv shell.)
 
 **From GitHub, without the laptop:** anyone with write access can start or stop
@@ -72,10 +88,11 @@ the Tailscale app, and your Age key in `SOPS_AGE_KEY_FILE` (default
   of MeowIce's, which crash the JVM there.
 - **`backup`**: `itzg/mc-backup` with Restic, VPS only (Compose profile `backup`).
   It backs up hourly, pausing when no players are online, and applies snapshot
-  retention. Snapshots tagged `pre-prune` are kept for rollbacks.
+  retention. Snapshots tagged `pre-prune` (before a prune) and `pre-restore` (the
+  safety backup before `server restore`) are kept for rollbacks.
 
 The world is in `data/minecraft` (gitignored). On the VPS, the app lives in `~/app`.
-Recovery from a specific snapshot is in [docs/backup.md](docs/backup.md).
+Restores, rollbacks, drills and recovery by hand: [docs/backup.md](docs/backup.md).
 
 Useful commands from the app directory:
 
@@ -145,6 +162,9 @@ The Dependency Dashboard issue lists everything pending. Not covered:
 - `devenv.lock`: run `devenv update`.
 - The SOPS version and checksums in `infra/cloud-init.yaml`.
 - MCA Selector in `scripts/prune.sh`.
+- The mods in `MODRINTH_PROJECTS` and the Fabric loader: not pinned yet, so each
+  start downloads the newest allowed version. `python3 scripts/pin_mods.py`
+  (on the laptop; `--write` to apply) pins every mod to a Modrinth version ID.
 
 Bump those by hand.
 
@@ -171,8 +191,10 @@ tests use mocks and dummy credentials.
 - `scripts/prune.sh`, `scripts/prune_plan.py`, `prune/`: chunk pruning and its rules.
 - `scripts/publish-world.sh`, `scripts/world_zip.py`: the public `world.zip`.
 - `scripts/restore.sh` (`world`, `regions`, `rollback`) and
-  `scripts/test-backup.sh`: manual backup tools, run on the app host. They share
-  `scripts/lib.sh` (pinned images, and restic with secrets passed by name).
+  `scripts/test-backup.sh`: backup tools, run on the app host by hand or by
+  `server restore` / `server check`. They share `scripts/lib.sh` (pinned images,
+  and restic with secrets passed by name, against R2 or the vault).
+- `scripts/regions.py`: block coordinates to region files, for `restore --region`.
 - `compose.yml`, `static/icon.png`: the game and its backups.
 - `infra/`: Hetzner VPS, firewall, DNS, Tailscale bootstrap, cloud-init.
 - `secrets/`: SOPS-encrypted settings.

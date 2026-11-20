@@ -15,7 +15,13 @@ with open(os.environ["MOCK_LOG"], "a") as log:
     log.write(json.dumps(sys.argv[1:]) + "\n")
 if "ls -1d" in " ".join(sys.argv):
     print(os.environ.get("PREVIOUS", ""))
+if "snapshots" in sys.argv:
+    # Only snapshots of the VPS host are listed (restic filters by --host).
+    print(os.environ.get("SNAP_JSON") or json.dumps([
+        {"id": FULL, "time": "2026-11-19T12:00:00Z"},
+        {"id": "abd0000011112222", "time": "2026-11-18T12:00:00Z"}]))
 '''
+FULL = "abcdef1234567890"
 
 
 class RestoreTests(unittest.TestCase):
@@ -27,7 +33,7 @@ class RestoreTests(unittest.TestCase):
                                    "R2_SECRET_ACCESS_KEY=s\nRESTIC_PASSWORD=p\n")
         mocks = root / "mocks"
         mocks.mkdir()
-        (mocks / "docker").write_text(f"#!{sys.executable}\n" + MOCK)
+        (mocks / "docker").write_text(f"#!{sys.executable}\nFULL = {FULL!r}\n" + MOCK)
         (mocks / "docker").chmod(0o755)
         log = root / "calls.jsonl"
         log.touch()
@@ -64,15 +70,34 @@ class RestoreTests(unittest.TestCase):
         result, calls = self.run_restore("world", "abc", "--yes")
         self.assertEqual(result.returncode, 0, result.stderr)
         aside = next(i for i, call in enumerate(calls) if "minecraft_pre_restore_" in call)
-        restore = next(i for i, call in enumerate(calls) if " restore abc --host mc-backup-worker" in call)
+        restore = next(i for i, call in enumerate(calls) if f" restore {FULL} --host mc-backup-worker" in call)
         self.assertLess(aside, restore)
         self.assertTrue(calls[-1].startswith("compose up -d --wait"))
+
+    def test_restores_only_use_a_single_vps_snapshot(self):
+        # The ID is resolved against the host-filtered list, so a snapshot of
+        # another host (absent from it), or an ambiguous prefix, is refused.
+        for snapshot in ("0123abcd", "ab", "not-hex"):
+            for argv in (("world", snapshot, "--yes"),
+                         ("regions", snapshot, "world/dimensions/minecraft/the_end/region/r.0.0.mca")):
+                with self.subTest(argv=argv):
+                    result, calls = self.run_restore(*argv)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("No single mc-backup-worker snapshot", result.stderr)
+                    self.assertFalse([call for call in calls if " restore " in f" {call} " or "compose" in call])
+        listing = next(call for call in self.run_restore("world", "abc", "--yes")[1] if "snapshots" in call)
+        self.assertIn("--no-lock snapshots --host mc-backup-worker --json", listing)
+
+    def test_latest_resolves_to_the_newest_vps_snapshot(self):
+        result, calls = self.run_restore("world", "latest", "--yes")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue([call for call in calls if f" restore {FULL} --host mc-backup-worker" in call])
 
     def test_world_and_rollback_ask_first(self):
         result, calls = self.run_restore("world", "abc", stdin="n\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Aborted", result.stdout)
-        self.assertEqual(calls, [])
+        self.assertEqual([call for call in calls if "snapshots" not in call], [])
         result, calls = self.run_restore("rollback", stdin="n\n", PREVIOUS="/d/minecraft_pre_restore_1")
         self.assertIn("Aborted", result.stdout)
         self.assertFalse([call for call in calls if "compose" in call])

@@ -14,20 +14,42 @@ RCLONE_IMAGE=rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332ae
 # consider these snapshots.
 WORLD_HOST=mc-backup-worker
 
-# restic <args>: runs restic against the R2 backups with the credentials in
-# ./.env, and data/minecraft mounted at /data. Values are passed by name
-# (-e NAME), so secrets never appear in process lists.
+# The vault bucket: a copy of the backups that R2 bucket locks keep for 30
+# days. The same restic repository (same password), written only by bin/server.
+VAULT_BUCKET=${VAULT_BUCKET:-cactuz-mc-vault}
+
+# restic <args>: runs restic against the R2 backups, with data/minecraft mounted
+# at /data. The credentials come from ./.env (the app host), or from the
+# environment when bin/server has already decrypted them (`secrets app`).
+# RESTIC_SOURCE=vault reads the vault bucket instead, with the VAULT_* keys
+# (`secrets all`). Values are passed by name (-e NAME), so secrets never
+# appear in process lists.
 restic() {
-  (set -a
-   # shellcheck disable=SC1091
-   . ./.env
-   set +a
-   RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${R2_BUCKET_NAME}"
-   AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-   export RESTIC_REPOSITORY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  (if [[ -f ./.env ]]; then
+     set -a
+     # shellcheck disable=SC1091
+     . ./.env
+     set +a
+   fi
+   [[ -n "${R2_ENDPOINT:-}" ]] || { echo "restic: no ./.env and no decrypted secrets" >&2; exit 1; }
+   local bucket=$R2_BUCKET_NAME key_id=$R2_ACCESS_KEY_ID key=$R2_SECRET_ACCESS_KEY
+   if [[ "${RESTIC_SOURCE:-}" == vault ]]; then
+     bucket=$VAULT_BUCKET key_id=$VAULT_ACCESS_KEY_ID key=$VAULT_SECRET_ACCESS_KEY
+   fi
+   RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${bucket}"
+   AWS_ACCESS_KEY_ID="$key_id" AWS_SECRET_ACCESS_KEY="$key"
+   export RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
    docker run --rm --entrypoint restic -v "$PWD/data/minecraft:/data" \
      -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
      "$BACKUP_IMAGE" -o s3.region=auto "$@")
+}
+
+# world_snapshot <id|latest>: prints the full ID of that snapshot, but only if
+# it is one of WORLD_HOST's (restic ignores --host for an explicit ID). Fails
+# when there is no such snapshot, or the ID prefix is ambiguous.
+world_snapshot() {
+  restic --no-lock snapshots --host "$WORLD_HOST" --json |
+    python3 "$(dirname -- "${BASH_SOURCE[0]}")/snapshots.py" --find "$1"
 }
 
 # Gives the world files back to the game's user (uid 1000).

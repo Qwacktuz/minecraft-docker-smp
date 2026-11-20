@@ -155,9 +155,10 @@ services:
       # Compression & Size Savings (exclude bluemap)
       EXCLUDES: "bluemap,logs,cache,emotes,*.tmp,web,*.map"
 
-      # Snapshots tagged pre-prune (taken before a chunk prune) are kept too;
-      # bin/server keeps that tag on the newest few only.
-      PRUNE_RESTIC_RETENTION: "--keep-within 24h --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --keep-tag pre-prune"
+      # Snapshots tagged pre-prune (taken before a chunk prune) and pre-restore
+      # (the safety backup before `bin/server restore`) are kept too;
+      # bin/server keeps each tag on the newest few only.
+      PRUNE_RESTIC_RETENTION: "--keep-within 24h --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --keep-tag pre-prune --keep-tag pre-restore"
       BACKUP_METHOD: "restic"
       # The identity restores filter on (deploy.sh, bin/server). Older snapshots
       # carry this name too, from when it was the container hostname.

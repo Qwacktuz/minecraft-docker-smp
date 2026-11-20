@@ -60,6 +60,7 @@ class ComposeTests(unittest.TestCase):
         result = self.render()
         backup = json.loads(result.stdout)["services"]["backup"]["environment"]
         self.assertIn("--keep-tag pre-prune", backup["PRUNE_RESTIC_RETENTION"])
+        self.assertIn("--keep-tag pre-restore", backup["PRUNE_RESTIC_RETENTION"])
         host = backup["RESTIC_HOST"]
         self.assertIn(f"WORLD_HOST={host}", (ROOT / "scripts/lib.sh").read_text())
         # bin/server reads it from scripts/lib.sh rather than defining its own.

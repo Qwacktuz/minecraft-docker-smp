@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -32,13 +33,17 @@ if name == "docker":
         assert Path(".env").read_text() == "OLD=preserved\n"
     if stage in ("config", "pull", "up") and stage in args:
         sys.exit(1)
+    if "--entrypoint" in args and os.environ.get("REPO_LOG"):
+        with open(os.environ["REPO_LOG"], "a") as seen:
+            seen.write(f"{os.environ['RESTIC_REPOSITORY']} {os.environ['AWS_ACCESS_KEY_ID']}\n")
     if "restore" in args:  # restic restore writes the world into data/minecraft
         Path("data/minecraft/world").mkdir(parents=True, exist_ok=True)
         Path("data/minecraft/world/level.dat").touch()
     if args[:1] == ["info"]:
         print("aarch64" if stage == "arm64" else "x86_64")
     if "snapshots" in args:
-        print("[]" if stage == "no-snapshots" else '[{"id": "abc"}]')
+        print("[]" if stage == "no-snapshots" else
+              '[{"id": "abc", "time": "2026-11-19T12:00:00Z"}, {"id": "def456", "time": "2026-11-18T12:00:00Z"}]')
     if "ps" in args:
         print("minecraft-service")
 '''
@@ -63,7 +68,7 @@ class DeployTests(unittest.TestCase):
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log),
                    PATH=f"{binary}:{os.environ['PATH']}", **extra)
-        for key in ("RESTORE", "NEW_WORLD", "BACKUPS"):
+        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE"):
             if key not in extra:
                 env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
@@ -112,6 +117,32 @@ class DeployTests(unittest.TestCase):
             if "restore" in call or "snapshots" in call:
                 self.assertIn("--no-lock", call)
                 self.assertEqual(call[call.index("--host") + 1], "mc-backup-worker")
+
+    def test_restore_a_snapshot_id_only_from_the_vps_host(self):
+        _, result, calls = self.run_deploy(RESTORE="def4")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        restore = next(call for call in calls if "restore" in call)
+        self.assertEqual(restore[restore.index("restore") + 1], "def456")
+        self.assertEqual(restore[restore.index("--host") + 1], "mc-backup-worker")
+        # Not in the host-filtered list (another host's snapshot, or a typo): stop.
+        _, result, calls = self.run_deploy(RESTORE="0bad")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("No single mc-backup-worker snapshot", result.stderr)
+        self.assertFalse(any("restore" in call or "up" in call for call in calls))
+
+    def test_vault_restores_read_the_vault_bucket_with_its_own_keys(self):
+        repositories = Path(tempfile.mkdtemp()) / "repos"
+        self.addCleanup(shutil.rmtree, repositories.parent)
+        _, result, calls = self.run_deploy(
+            RESTORE="latest", RESTIC_SOURCE="vault", VAULT_ACCESS_KEY_ID="vk",
+            VAULT_SECRET_ACCESS_KEY="vs", REPO_LOG=str(repositories))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        seen = repositories.read_text().splitlines()
+        self.assertTrue(seen)
+        for line in seen:
+            self.assertEqual(line, "s3:https://r2.invalid/cactuz-mc-vault vk")
+        for call in calls:
+            self.assertNotIn("vs", call)
 
     def test_only_backups_1_enables_the_backup_service(self):
         root, result, calls = self.run_deploy(BACKUPS="1")

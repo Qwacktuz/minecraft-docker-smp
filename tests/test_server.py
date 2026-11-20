@@ -26,18 +26,27 @@ with open(os.environ["MOCK_LOG"], "a") as log:
 command = " ".join(args)
 
 def snapshots():
-    if "--tag pre-prune" in command:
-        # Pre-prune snapshots: PRE_PRUNE, plus the one `restic tag --add` tagged.
-        tagged = json.loads(os.environ.get("PRE_PRUNE", "[]"))
-        if Path(os.environ["MOCK_LOG"] + ".tagged").exists():
-            tagged.append({"id": "abc", "time": os.environ["SNAP_TIME"]})
-        print(json.dumps(tagged))
+    for tag, variable in (("pre-prune", "PRE_PRUNE"), ("pre-restore", "PRE_RESTORE")):
+        if f"--tag {tag}" in command:
+            # Tagged snapshots: $variable, plus the one `restic tag --add` tagged.
+            # Like restic, tagging rewrites the snapshot under a new ID (abd).
+            tagged = json.loads(os.environ.get(variable, "[]"))
+            if Path(os.environ["MOCK_LOG"] + ".tagged-" + tag).exists():
+                tagged.append({"id": "abd", "time": os.environ["SNAP_TIME"]})
+            print(json.dumps(tagged))
+            return
     else:
         print(os.environ.get("SNAP_JSON") or json.dumps([{"id": "abc", "time": os.environ["SNAP_TIME"]}]))
 
 if name == "sops" and args[:1] == ["exec-env"]:
     # Like sops: run the command through a shell with the "decrypted" values.
     secrets = {"TOFU_BACKEND_BUCKET": "state-bucket", "TF_VAR_hcloud_token": "decrypted"}
+    if args[1].endswith("app.enc.env"):
+        secrets.update(R2_ENDPOINT="https://r2.invalid", R2_BUCKET_NAME="backups",
+                       R2_ACCESS_KEY_ID="r2-id", R2_SECRET_ACCESS_KEY="r2-secret",
+                       RESTIC_PASSWORD="restic-secret")
+    else:
+        secrets.update(VAULT_ACCESS_KEY_ID="vault-id", VAULT_SECRET_ACCESS_KEY="vault-secret")
     sys.exit(subprocess.call(["sh", "-c", args[2]], env=dict(os.environ, **secrets)))
 if name == "tofu":
     if "TF_VAR_hcloud_token" not in os.environ:
@@ -51,6 +60,11 @@ if name == "tofu":
     if "output" in args:
         print("192.0.2.1")
 elif name == "docker":
+    if "--entrypoint" in args:  # lib.sh restic(): record where it reads from
+        with open(os.environ["MOCK_LOG"] + ".repos", "a") as repos:
+            repos.write(f"{os.environ['RESTIC_REPOSITORY']} {os.environ['AWS_ACCESS_KEY_ID']}\n")
+        if " check " in f" {command} " and flag("CHECK_FAIL"):
+            sys.exit(1)
     if "ps" in args and flag("LOCAL"):
         print("minecraft-service")
     if "backup now" in command and flag("BACKUP_FAIL"):
@@ -66,8 +80,11 @@ elif name == "ssh":
         sys.exit(1)
     if "restic" in command and " snapshots " in command + " ":
         snapshots()
-    if "tag --add pre-prune" in command:
-        Path(os.environ["MOCK_LOG"] + ".tagged").touch()
+    for tag in ("pre-prune", "pre-restore"):
+        if f"tag --add {tag}" in command:
+            Path(os.environ["MOCK_LOG"] + ".tagged-" + tag).touch()
+    if "scripts/restore.sh" in command and flag("RESTORE_FAIL"):
+        sys.exit(1)
     if "restic" in command and " check " in command and flag("CHECK_FAIL"):
         print("Fatal: repository contains errors")
         sys.exit(1)
@@ -106,12 +123,15 @@ class ServerTests(unittest.TestCase):
         (root / "prune/settings.env").write_text(
             f"AUTO_PRUNE_DAYS={flags.pop('AUTO_PRUNE_DAYS', '0')}\nPRUNE_KEEP_SNAPSHOTS=2\n")
         shutil.copy(SERVER, root / "bin/server")
-        for script in ("lib.sh", "snapshots.py"):
+        for script in ("lib.sh", "snapshots.py", "regions.py", "test-backup.sh"):
             shutil.copy(SERVER.parents[1] / "scripts" / script, root / "scripts" / script)
         # Stand-in deploy script: records the settings bin/server hands it.
         (root / "scripts/deploy.sh").write_text(
             'echo "{\\"argv\\": [\\"deploy.sh\\", \\"RESTORE=$RESTORE\\"], '
-            '\\"stdin\\": \\"\\"}" >> "$MOCK_LOG"\n')
+            '\\"stdin\\": \\"\\", \\"source\\": \\"${RESTIC_SOURCE:-}\\", '
+            '\\"backups\\": \\"${BACKUPS:-}\\"}" >> "$MOCK_LOG"\n'
+            '[ "${DEPLOY_FAIL:-}" = 1 ] && exit 1\n'
+            'mkdir -p data/minecraft/world && touch data/minecraft/world/level.dat\n')
         mocks = root / "mocks"
         mocks.mkdir()
         for name in ("tofu", "docker", "ssh", "git", "tailscale", "sops", "sleep", "curl", "rclone"):
@@ -124,12 +144,15 @@ class ServerTests(unittest.TestCase):
         log.touch()
         env = dict(os.environ, MOCK_LOG=str(log), SOPS_AGE_KEY_FILE=str(key),
                    SNAP_TIME=iso(+60), PATH=f"{mocks}:{os.environ['PATH']}")
-        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY"):
+        for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
+                         "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT"):
             env.pop(variable, None)
         env.update({key: value for key, value in flags.items()})
         result = subprocess.run(["bash", str(root / "bin/server"), *argv], env=env,
                                 capture_output=True, text=True, stdin=subprocess.DEVNULL)
         calls = [json.loads(line) for line in log.read_text().splitlines()]
+        repos = Path(f"{log}.repos")
+        self.repos = repos.read_text().splitlines() if repos.exists() else []
         return result, calls
 
     @staticmethod
@@ -189,7 +212,11 @@ class ServerTests(unittest.TestCase):
         _, calls = self.run_server("vault")
         files = [Path(call["argv"][2]).name for call in calls if call["argv"][0] == "sops"]
         self.assertEqual(files, ["app.enc.env", "infra.enc.env"])
-        self.assertIn("_vault-copy", calls[-1]["argv"][3])
+        self.assertIn("_vault-copy", [c for c in calls if c["argv"][0] == "sops"][-1]["argv"][3])
+        # rclone reads the backups bucket and writes the vault, keys by environment only.
+        rclone = calls[self.find(calls, "rclone copy")[0]]["argv"]
+        self.assertEqual(rclone[2:4], ["backups:backups", "vault:cactuz-mc-vault"])
+        self.assertNotIn("vault-secret", " ".join(rclone))
 
     def test_stop_aborts_when_snapshot_is_stale(self):
         result, calls = self.run_server("stop", VPS="1", SNAP_TIME=iso(-3600))
@@ -244,7 +271,7 @@ class ServerTests(unittest.TestCase):
 
     def test_backup_checks_only_read_vps_snapshots(self):
         _, calls = self.run_server("stop", VPS="1")
-        checks = self.find(calls, "snapshots")
+        checks = [i for i in self.find(calls, "snapshots") if calls[i]["argv"][0] != "rclone"]
         self.assertTrue(checks)
         for i in checks:
             self.assertIn("--host mc-backup-worker", " ".join(calls[i]["argv"]))
@@ -265,7 +292,7 @@ class ServerTests(unittest.TestCase):
         # PRUNE_KEEP_SNAPSHOTS=2 keeps the new one (abc) and s0.
         self.assertIn("s1 s2 s3", untag)
         self.assertNotIn("s0", untag)
-        self.assertIn("rollbacks: abc", result.stdout)
+        self.assertIn("rollbacks: abd", result.stdout)
 
     def test_failed_prune_restarts_the_game(self):
         result, calls = self.run_server("prune", VPS="1", PRUNE_FAIL="1")
@@ -376,6 +403,215 @@ class ServerTests(unittest.TestCase):
         result, _ = self.run_server("launch")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("bin/server start local", result.stderr)
+
+    # --- Backups from the laptop (read-only) ---------------------------------
+
+    SECRET_VALUES = ("r2-secret", "restic-secret", "vault-secret", "decrypted")
+
+    def assert_no_secrets_in_argv(self, calls):
+        for call in calls:
+            for value in self.SECRET_VALUES:
+                self.assertNotIn(value, " ".join(call["argv"]))
+
+    def assert_laptop_only(self, calls):
+        """Read-only from the laptop: no VPS, no OpenTofu, nothing that writes."""
+        for text in ("ssh", "apply", "destroy", "backup now", "tag --add", "rclone", "deploy.sh"):
+            self.assertFalse(self.find(calls, text), text)
+
+    def test_backups_lists_vps_snapshots_without_a_lock(self):
+        result, calls = self.run_server("backups")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        listing = " ".join(calls[self.find(calls, "--entrypoint restic")[0]]["argv"])
+        self.assertIn("--no-lock snapshots --host mc-backup-worker --compact", listing)
+        self.assertEqual(self.repos, ["s3:https://r2.invalid/backups r2-id"])
+        self.assertEqual([Path(c["argv"][2]).name for c in calls if c["argv"][0] == "sops"], ["app.enc.env"])
+        self.assert_laptop_only(calls)
+        self.assert_no_secrets_in_argv(calls)
+
+    def test_backups_vault_reads_the_vault_with_its_keys(self):
+        result, calls = self.run_server("backups", "--vault")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("the vault (cactuz-mc-vault)", result.stdout)
+        self.assertEqual(self.repos, ["s3:https://r2.invalid/cactuz-mc-vault vault-id"])
+        self.assert_laptop_only(calls)
+        self.assert_no_secrets_in_argv(calls)
+        result, _ = self.run_server("backups", "--bogus")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_check_reads_a_share_of_the_data_without_writing(self):
+        for argv, percent in ((("check",), "5%"), (("check", "25"), "25%"), (("check", "2.5"), "2.5%")):
+            with self.subTest(argv=argv):
+                result, calls = self.run_server(*argv)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Backup check passed", result.stdout)
+                check = " ".join(calls[self.find(calls, " check ")[0]]["argv"])
+                self.assertIn(f"--no-lock check --read-data-subset {percent}", check)
+                for i in self.find(calls, "--entrypoint restic"):
+                    self.assertIn("--no-lock", calls[i]["argv"])
+                self.assert_laptop_only(calls)
+                self.assert_no_secrets_in_argv(calls)
+
+    def test_check_vault_and_failures(self):
+        result, calls = self.run_server("check", "10", "--vault")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.repos)
+        self.assertEqual(set(self.repos), {"s3:https://r2.invalid/cactuz-mc-vault vault-id"})
+        result, _ = self.run_server("check", CHECK_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Backup check passed", result.stdout)
+        for bad in ("abc", "0", "150", "5%"):
+            with self.subTest(percent=bad):
+                result, calls = self.run_server("check", bad)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.find(calls, " check "))
+
+    def test_drill_restores_from_the_vault_checks_and_stops(self):
+        result, calls = self.run_server("drill")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        deploy = calls[self.find(calls, "deploy.sh")[0]]
+        self.assertEqual(deploy["argv"], ["deploy.sh", "RESTORE=latest"])
+        self.assertEqual((deploy["source"], deploy["backups"]), ("vault", ""))
+        self.assertLess(self.find(calls, "deploy.sh")[0], self.find(calls, "compose down")[0])
+        self.assertIn("Drill passed", result.stdout)
+        self.assert_no_secrets_in_argv(calls)
+        for text in ("ssh", "apply", "destroy", "backup now", "rclone"):
+            self.assertFalse(self.find(calls, text), text)
+        _, calls = self.run_server("drill", "abc123")
+        self.assertEqual(calls[self.find(calls, "deploy.sh")[0]]["argv"], ["deploy.sh", "RESTORE=abc123"])
+
+    def test_drill_failure_stops_the_copy_and_fails(self):
+        result, calls = self.run_server("drill", DEPLOY_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("drill failed", result.stderr)
+        self.assertTrue(self.find(calls, "compose down"))
+        result, calls = self.run_server("drill", LOCAL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.find(calls, "deploy.sh"))
+        result, calls = self.run_server("drill", "../etc")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.find(calls, "deploy.sh"))
+
+    # --- Restores ------------------------------------------------------------
+
+    def test_restore_on_the_vps_takes_a_safety_backup_first(self):
+        result, calls = self.run_server("restore", "ab", "--yes", VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        order = [self.find(calls, text)[0] for text in (
+            "--json --host mc-backup-worker",  # the ID is resolved among VPS snapshots
+            "backup now", "tag --add pre-restore abc", "scripts/restore.sh world abc --yes")]
+        self.assertEqual(order, sorted(order))
+        run = " ".join(calls[order[-1]]["argv"])
+        # Under the deploy lock, with the backup container stopped and recreated.
+        self.assertIn("flock", run)
+        self.assertLess(run.index("compose stop backup"), run.index("restore.sh"))
+        self.assertLess(run.index("restore.sh"), run.index("--force-recreate"))
+        self.assertIn("Safety backup: abd", result.stdout)
+        self.assertFalse(self.find(calls, "destroy"))
+
+    def test_restore_asks_first_and_refuses_unknown_snapshots(self):
+        result, calls = self.run_server("restore", "abc", VPS="1")  # no tty, no --yes
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Aborted", result.stdout)
+        self.assertFalse(self.find(calls, "backup now"))
+        self.assertFalse(self.find(calls, "restore.sh"))
+        for snapshot in ("ff00", "not-hex"):
+            with self.subTest(snapshot=snapshot):
+                result, calls = self.run_server("restore", snapshot, "--yes", VPS="1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.find(calls, "backup now"))
+                self.assertFalse(self.find(calls, "restore.sh"))
+        result, _ = self.run_server("restore", VPS="1")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_failed_safety_backup_or_restore_stops(self):
+        result, calls = self.run_server("restore", "abc", "--yes", VPS="1", BACKUP_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.find(calls, "restore.sh"))
+        result, calls = self.run_server("restore", "abc", "--yes", VPS="1", RESTORE_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Safety backup: abd", result.stderr)
+
+    def test_restore_without_a_vps_starts_a_read_only_local_copy(self):
+        for flags in ({}, {"LOCAL": "1"}):
+            with self.subTest(**flags):
+                result, calls = self.run_server("restore", "abc123", **flags)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                deploy = calls[self.find(calls, "deploy.sh")[0]]
+                self.assertEqual(deploy["argv"], ["deploy.sh", "RESTORE=abc123"])
+                self.assertEqual(deploy["backups"], "")
+                for text in ("ssh", "backup now", "tag --add", "apply"):
+                    self.assertFalse(self.find(calls, text), text)
+
+    def test_region_restore_on_the_vps(self):
+        result, calls = self.run_server("restore", "abc", "--region", "nether", "-1", "511", "1", "--yes",
+                                        VPS="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLess(self.find(calls, "tag --add pre-restore")[0], self.find(calls, "restore.sh regions")[0])
+        run = " ".join(calls[self.find(calls, "restore.sh regions")[0]]["argv"])
+        folder = "world/dimensions/minecraft/the_nether/region"
+        # Blocks -2..0 x 510..512: regions -1 and 0 on both axes.
+        for name in ("r.-1.0.mca", "r.-1.1.mca", "r.0.0.mca", "r.0.1.mca"):
+            self.assertIn(f"{folder}/{name}", run)
+        self.assertEqual(run.count(".mca"), 4)
+        self.assertIn("compose stop backup", run)
+        self.assertIn("Restored 4 region file(s)", result.stdout)
+
+    def test_region_restore_needs_the_vps_and_valid_coordinates(self):
+        result, calls = self.run_server("restore", "abc", "--region", "overworld", "0", "0", "--yes")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runs on the VPS", result.stderr)
+        self.assertFalse(self.find(calls, "deploy.sh"))
+        for region in (("moon", "0", "0"), ("end", "1.5", "0"), ("end", "0")):
+            with self.subTest(region=region):
+                result, calls = self.run_server("restore", "abc", "--region", *region, "--yes", VPS="1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.find(calls, "backup now"))
+
+    def test_rollback_on_the_vps_restores_the_newest_safety_backup(self):
+        safety = json.dumps([{"id": "5afe02", "time": iso(-60)}, {"id": "5afe01", "time": iso(-7200)}])
+        result, calls = self.run_server("rollback", "--yes", VPS="1", PRE_RESTORE=safety)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # A new safety backup first, so the rollback can be undone too.
+        self.assertLess(self.find(calls, "tag --add pre-restore abc")[0],
+                        self.find(calls, "restore.sh world 5afe02 --yes")[0])
+        self.assertFalse(self.find(calls, "5afe01"))
+
+    def test_rollback_without_a_vps_starts_it_from_the_safety_backup(self):
+        safety = json.dumps([{"id": "5afe02", "time": iso(-60)}])
+        result, calls = self.run_server("rollback", "--yes", PRE_RESTORE=safety)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        listing = " ".join(calls[self.find(calls, "--entrypoint restic")[0]]["argv"])
+        self.assertIn("--no-lock snapshots --tag pre-restore --host mc-backup-worker", listing)
+        self.assertTrue(self.find(calls, "apply"))
+        deploy = " ".join(calls[self.find(calls, "scripts/deploy.sh")[0]]["argv"])
+        self.assertIn("RESTORE=5afe02", deploy)
+        self.assert_no_secrets_in_argv(calls)
+
+    def test_rollback_refuses_without_a_safety_backup_or_locally(self):
+        result, calls = self.run_server("rollback", "--yes", VPS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no safety backup", result.stderr)
+        self.assertFalse(self.find(calls, "backup now"))
+        result, calls = self.run_server("rollback", "--yes", LOCAL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.find(calls, "deploy.sh"))
+        safety = json.dumps([{"id": "5afe02", "time": iso(-60)}])
+        result, calls = self.run_server("rollback", PRE_RESTORE=safety)  # not confirmed
+        self.assertIn("Aborted", result.stdout)
+        self.assertFalse(self.find(calls, "apply"))
+
+    def test_restores_stay_off_github(self):
+        # The workflow offers only start and stop, and runs nothing else.
+        workflow = (SERVER.parents[1] / ".github/workflows/server.yml").read_text()
+        self.assertIn("options: [start, stop]", workflow)
+        self.assertIn("set -- start vps; else set -- stop;", workflow)
+        for command in ("rollback", "drill", "restore <", "set -- restore", "backups"):
+            self.assertNotIn(command, workflow)
+
+    def test_usage_lists_the_backup_commands(self):
+        result, _ = self.run_server("help")
+        for command in ("backups", "check", "drill", "restore <id>", "--region", "rollback", "tofu <args>"):
+            self.assertIn(command, result.stdout)
 
 
 if __name__ == "__main__":

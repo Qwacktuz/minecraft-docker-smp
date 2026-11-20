@@ -73,7 +73,7 @@ variable "server_type" {
 }
 
 variable "server_image" {
-  description = "Instance type"
+  description = "OS image (Hetzner's maintained debian-13; cloud-init upgrades packages)"
   type        = string
   default     = "debian-13"
 }

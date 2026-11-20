@@ -82,22 +82,23 @@ It ships turned **off** (`AUTO_PRUNE_DAYS=0`). Look at a dry run first, adjust
 ## Undoing a prune
 
 Chunks are deleted from region files, so a rollback restores those files from the
-pre-prune snapshot. On the VPS, from `~/app`:
+pre-prune snapshot. From the laptop:
 
 ```bash
-docker compose exec backup restic snapshots --tag pre-prune   # pick the ID
+server backups        # the pre-prune snapshots carry the tag; pick the ID
 ```
 
-- **Everything:** restore that snapshot with the steps in
-  [backup.md](backup.md). Anything built since then is lost.
-- **One area:** restore just that area's region files. A region file covers
-  512×512 blocks: `r.<floor(x/512)>.<floor(z/512)>.mca`. The script stops the game,
-  restores each file with its `entities/` and `poi/` partners, and starts the game again:
+- **Everything:** `server restore <pre-prune-id>` (see [backup.md](backup.md)).
+  Anything built since then is lost; `server rollback` undoes the restore.
+- **One area:** restore just that area's region files:
 
   ```bash
-  bash scripts/restore.sh regions <pre-prune-id> \
-    world/dimensions/minecraft/overworld/region/r.2.-1.mca
+  server restore <pre-prune-id> --region overworld 1200 -340 200
   ```
 
-  Changes made in those regions since the prune are lost. The rest of the world is
-  untouched.
+  It takes a safety backup, stops the game, restores each region file touching
+  the 400×400-block square around x=1200, z=-340 with its `entities/` and `poi/`
+  partners, and starts the game again. A region file covers 512×512 blocks:
+  `r.<floor(x/512)>.<floor(z/512)>.mca`. Changes made in those regions since the
+  prune are lost. The rest of the world is untouched. By hand, on the VPS:
+  `bash scripts/restore.sh regions <id> world/dimensions/minecraft/overworld/region/r.2.-1.mca`.
