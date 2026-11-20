@@ -13,7 +13,7 @@ import leaderboard  # noqa: E402
 
 ALICE = "069a79f4-44e9-4726-a5be-fca90e38aaf5"
 BOB = "853c80ef-3c37-49fd-aa49-938b674adae6"
-BOT = "11111111-2222-3333-4444-555555555555"  # a Carpet bot: not whitelisted
+BOT = "b50ad385-829d-3141-a216-7e7d7539ba7f"  # Carpet's bot "Notch": an offline UUID, not the real one
 
 
 def stats(play_ticks=0, mined=None, **custom):

@@ -18,8 +18,14 @@ and from Ledger's log (world/ledger.sqlite), when there is one:
 - placed: blocks placed, leaving out placements an op rolled back
 
 Only whitelisted players and ops are listed, so Carpet bots and players who
-left the whitelist stay out. Totals only: no positions, inventories or times.
-The database is opened read-only, so this is safe while the game runs.
+left the whitelist stay out: a bot gets an offline UUID, never the one a real
+account has, even with a whitelisted name. (Bots also earn no distance: the
+game counts movement from a client's packets.) Totals only: no positions,
+inventories or times. The database is opened read-only, so this is safe while
+the game runs.
+
+Checked on a real server (scripts/smoke-test.sh): the stats files' place and
+format, Ledger 1.3.25's tables, its 16-byte UUIDs, and a player's placements.
 """
 
 import json
