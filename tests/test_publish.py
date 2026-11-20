@@ -21,6 +21,8 @@ class WorldZipTests(unittest.TestCase):
             (region / "r.0.0.mca").write_bytes(b"\0" * 8192)
             (world / "players/data").mkdir(parents=True)
             (world / "players/data/someone.dat").write_bytes(b"inventory")
+            for name in ("ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm"):
+                (world / name).write_bytes(b"who broke what")
             out = Path(temp) / "world.zip"
             world_zip.main(world, out)
             with zipfile.ZipFile(out) as archive:

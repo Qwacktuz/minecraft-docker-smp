@@ -70,13 +70,19 @@ restore. Restores only consider snapshots from the VPS backup host
 map stays online while the server is off. The next `start vps` pulls it back,
 so only changed chunks are rendered again. Details: [docs/map.md](docs/map.md).
 
+**Grief logs.** [Ledger](https://modrinth.com/mod/ledger) records block changes,
+container use and kills in `world/ledger.sqlite` (in the backups, not in
+`world.zip`) and keeps 90 days (`config/ledger.toml`). Ops look things up and
+roll back in game, e.g. `/lg i` (inspect blocks by clicking), `/lg search
+player:Name range:20 after:2d`, `/lg rollback range:20 before:1h`.
+
 **Pruning** deletes chunks nobody spent time in, while keeping builds, player
 homes, recent activity and a buffer around them. It can also run automatically
 every month on `stop`. Rules, dry runs and rollbacks: [docs/pruning.md](docs/pruning.md).
 
 **A public world download.** Every VPS `stop` also uploads the world as
 **https://world.cactuz.dev/world.zip**, after the final backup and with the game
-stopped. It has no player data (inventories, positions, stats), so anyone can take a
+stopped. It has no player data (inventories, positions, stats) and no Ledger logs, so anyone can take a
 copy to test redstone in singleplayer or on their own server; the zip's README.txt
 explains how. It lives in its own public bucket (`PUBLIC_WORLD_BUCKET` in
 `app.enc.env`), separate from the private backups. If the upload fails, `stop`
