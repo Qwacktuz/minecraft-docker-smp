@@ -478,8 +478,8 @@ vps_snapshot() {
 # Takes a verified backup and tags it as the safety backup. Sets SAFETY_ID.
 safety_backup() {
   verified_backup "$1"
-  keep_tagged "$SAFETY_TAG" "$SNAPSHOT_ID" "$SAFETY_KEEP" >/dev/null
-  SAFETY_ID=$SNAPSHOT_ID
+  # `restic tag` rewrites the snapshot under a new ID: use the tagged one's.
+  SAFETY_ID=$(keep_tagged "$SAFETY_TAG" "$SNAPSHOT_ID" "$SAFETY_KEEP")
   say "Safety backup: ${SAFETY_ID:0:8} ('bin/server rollback' restores it)."
 }
 # Runs a restore.sh command on the VPS under the deploy lock, with the backup

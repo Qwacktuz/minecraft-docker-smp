@@ -29,9 +29,10 @@ def snapshots():
     for tag, variable in (("pre-prune", "PRE_PRUNE"), ("pre-restore", "PRE_RESTORE")):
         if f"--tag {tag}" in command:
             # Tagged snapshots: $variable, plus the one `restic tag --add` tagged.
+            # Like restic, tagging rewrites the snapshot under a new ID (abd).
             tagged = json.loads(os.environ.get(variable, "[]"))
             if Path(os.environ["MOCK_LOG"] + ".tagged-" + tag).exists():
-                tagged.append({"id": "abc", "time": os.environ["SNAP_TIME"]})
+                tagged.append({"id": "abd", "time": os.environ["SNAP_TIME"]})
             print(json.dumps(tagged))
             return
     else:
@@ -291,7 +292,7 @@ class ServerTests(unittest.TestCase):
         # PRUNE_KEEP_SNAPSHOTS=2 keeps the new one (abc) and s0.
         self.assertIn("s1 s2 s3", untag)
         self.assertNotIn("s0", untag)
-        self.assertIn("rollbacks: abc", result.stdout)
+        self.assertIn("rollbacks: abd", result.stdout)
 
     def test_failed_prune_restarts_the_game(self):
         result, calls = self.run_server("prune", VPS="1", PRUNE_FAIL="1")
@@ -504,7 +505,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("flock", run)
         self.assertLess(run.index("compose stop backup"), run.index("restore.sh"))
         self.assertLess(run.index("restore.sh"), run.index("--force-recreate"))
-        self.assertIn("Safety backup: abc", result.stdout)
+        self.assertIn("Safety backup: abd", result.stdout)
         self.assertFalse(self.find(calls, "destroy"))
 
     def test_restore_asks_first_and_refuses_unknown_snapshots(self):
@@ -528,7 +529,7 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(self.find(calls, "restore.sh"))
         result, calls = self.run_server("restore", "abc", "--yes", VPS="1", RESTORE_FAIL="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Safety backup: abc", result.stderr)
+        self.assertIn("Safety backup: abd", result.stderr)
 
     def test_restore_without_a_vps_starts_a_read_only_local_copy(self):
         for flags in ({}, {"LOCAL": "1"}):
