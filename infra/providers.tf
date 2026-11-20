@@ -12,7 +12,7 @@ terraform {
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = ">= 5"
+      version = "~> 5"
     }
     cloudinit = {
       source  = "hashicorp/cloudinit"

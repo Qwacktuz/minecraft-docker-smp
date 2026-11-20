@@ -64,6 +64,16 @@
       "rangeStrategy": "update-lockfile"
     },
     {
+      "description": "A new provider major gets its own PR that moves the range (~> 5 to ~> 6), never one that widens it to >= 5",
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "rangeStrategy": "replace"
+    },
+    {
       "description": "Keep the backup image the same in compose.yml and scripts/lib.sh",
       "matchPackageNames": [
         "itzg/mc-backup"
