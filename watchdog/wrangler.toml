@@ -10,8 +10,8 @@ crons = ["*/5 * * * *"]
 [vars]
 HOST = "mc.cactuz.dev"
 PORT = "25565"
-IDLE_MINUTES = "120"   # stop after this long with nobody online (Carpet bots count)
-MAX_DAYS = "7"         # stop after this long regardless
+IDLE_MINUTES = "120"                   # stop after this long with nobody online (Carpet bots count)
+MAX_DAYS = "14"                        # stop after this long regardless
 REPO = "Qwacktuz/minecraft-docker-smp"
 WORKFLOW = "server.yml"
 

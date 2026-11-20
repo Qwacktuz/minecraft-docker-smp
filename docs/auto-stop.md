@@ -29,7 +29,7 @@ it starts the **Server** workflow with `action=stop`, the same as pressing the
 button:
 
 - **nobody has been online for 2 hours** (`IDLE_MINUTES`), or
-- **the VPS has been up for 7 days** (`MAX_DAYS`), even with players online.
+- **the VPS has been up for 14 days** (`MAX_DAYS`), even with players online.
   That's a safety cap in case a bot is forgotten.
 
 The stop backs up, verifies the backup and deletes the VPS (`bin/server stop`).

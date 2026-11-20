@@ -5,7 +5,7 @@ Run every 15 minutes by .github/workflows/server.yml. It needs no secrets: it
 asks the game for its player count the way the in-game server list does.
 Carpet bots are players to the server, so they keep it running too.
 
-    idle_check.py --state FILE [--host mc.cactuz.dev] [--idle-minutes 120] [--max-days 7]
+    idle_check.py --state FILE [--host mc.cactuz.dev] [--idle-minutes 120] [--max-days 14]
 
 The state file remembers when the VPS was first seen and when someone was last
 online. Prints the decision; writes stop=true|false to $GITHUB_OUTPUT if set.
@@ -101,7 +101,7 @@ def main():
     parser.add_argument("--host", default="mc.cactuz.dev")
     parser.add_argument("--port", type=int, default=25565)
     parser.add_argument("--idle-minutes", type=int, default=120)
-    parser.add_argument("--max-days", type=int, default=7)
+    parser.add_argument("--max-days", type=int, default=14)
     args = parser.parse_args()
 
     now = int(time.time())
