@@ -64,14 +64,14 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "A new provider major gets its own PR that moves the range (~> 5 to ~> 6), never one that widens it to >= 5",
+      "description": "A provider major (or a widened range like >= 5) waits for a tick in the Dependency Dashboard before Renovate opens its PR",
       "matchManagers": [
         "terraform"
       ],
       "matchUpdateTypes": [
         "major"
       ],
-      "rangeStrategy": "replace"
+      "dependencyDashboardApproval": true
     },
     {
       "description": "Keep the backup image the same in compose.yml and scripts/lib.sh",
