@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased: the image rebuilds itself when people play (2026-11-21)
+
+- `.github/workflows/image.yml` runs `bin/server image --if-played` every
+  Monday. It rebuilds the mc-base image only if the world ran in the last 7
+  days (and the image is 6+ days old), and deletes it after 30 days without
+  play. "Run workflow" with *force* builds one now.
+- GitHub's runner reaches a VPS by its tailnet address too (`Host … 100.*`):
+  `bin/server` now connects to the address it gets from Tailscale.
+
 ## Unreleased: faster starts and stops, staging (2026-11-21)
 
 See [docs/performance.md](docs/performance.md). Staging on Hetzner: a start takes about 260 s (median of 4).

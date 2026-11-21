@@ -51,10 +51,11 @@ jobs:
           audience: ${{ vars.TS_AUDIENCE }}
           tags: tag:ci
 
-      - name: Reach the VPS by its Tailscale name
+      # By name or by tailnet address (bin/server's tailnet_wait uses the address).
+      - name: Reach the VPS over Tailscale
         run: |
           mkdir -p ~/.ssh
-          printf 'Host mc-prod\n  ProxyCommand tailscale nc %%h %%p\n' >> ~/.ssh/config
+          printf 'Host mc-prod 100.*\n  ProxyCommand tailscale nc %%h %%p\n' >> ~/.ssh/config
 
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
 

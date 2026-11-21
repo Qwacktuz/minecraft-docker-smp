@@ -1,0 +1,79 @@
+name: Image
+run-name: Image ${{ inputs.force && '(forced)' || '(weekly)' }}
+
+# The pre-built mc-base Hetzner image that new VPSs start from (about 70 s
+# faster than debian-13; docs/performance.md). Weekly, `bin/server image
+# --if-played` rebuilds it only if the world ran in the last 7 days, and
+# deletes it after 30 days without play, so a quiet month costs nothing.
+# A rebuild is one cx33 hour (about €0.015); the image costs about €0.03 a
+# month while it exists.
+#
+# It builds on a temporary staging VPS (mc-staging, its own OpenTofu state),
+# never the real one. Same secrets as server.yml: the prod environment's
+# SOPS_AGE_KEY and Tailscale's OIDC login.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build now, even if nobody played
+        type: boolean
+        default: false
+  schedule:
+    - cron: "41 4 * * 1" # Monday morning, before the mod update
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: prod
+    # bin/server start staging uses the same VPS and state.
+    concurrency:
+      group: staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # Tailscale login with GitHub's OIDC token
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ vars.TS_CLIENT_ID }}
+          audience: ${{ vars.TS_AUDIENCE }}
+          tags: tag:ci
+
+      - name: Reach the staging VPS over Tailscale
+        run: |
+          mkdir -p ~/.ssh
+          printf 'Host mc-staging 100.*\n  ProxyCommand tailscale nc %%h %%p\n' >> ~/.ssh/config
+
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (the version used locally)
+        run: nix profile add github:cachix/devenv/v2.4.0
+
+      - name: Write the CI Age key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          : "${SOPS_AGE_KEY:?the prod environment has no SOPS_AGE_KEY secret}"
+          umask 077
+          printf '%s\n' "$SOPS_AGE_KEY" > "$RUNNER_TEMP/age.txt"
+          echo "SOPS_AGE_KEY_FILE=$RUNNER_TEMP/age.txt" >> "$GITHUB_ENV"
+
+      - name: bin/server image
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [[ "$FORCE" == true ]]; then devenv shell bin/server image; else devenv shell bin/server image --if-played; fi
+
+      - name: Remove the Age key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/age.txt"

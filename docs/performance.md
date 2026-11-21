@@ -152,9 +152,22 @@ or with `MC_BASE_IMAGE=none`, it starts from `debian-13` as before.
 `image` is in `ignore_changes`, so a newer snapshot never replaces a running
 VPS.
 
-Rebuild it weekly, and after a Renovate image bump (the old images on it are
-only a cache: compose pulls the pinned ones anyway). Running it from CI is a
-follow-up.
+**Rebuilding is automatic**: `.github/workflows/image.yml` runs
+`bin/server image --if-played` every Monday. It looks at the newest VPS
+backup (the VPS backs up every hour and at each stop):
+
+| Last play | Image | What happens | Cost |
+|---|---|---|---|
+| in the last 7 days | missing, or 6+ days old | rebuild | one cx33 hour, ~€0.015 |
+| in the last 7 days | newer | keep | €0 |
+| 7–29 days ago | any | nothing | storage only, ~€0.03 a month |
+| 30+ days ago | exists | delete it | €0 from then on |
+
+So a quiet month costs nothing, and a playing week gets a fresh image (with
+that week's Debian updates and pinned images). "Run workflow" with *force*
+builds one now, for example before a busy weekend; so does `bin/server image`
+from the laptop. After a Renovate image bump nothing needs doing: compose
+pulls the new image anyway, just a few seconds slower until the next build.
 
 Built and tested on 2026-11-21 (see "The pre-built image on Hetzner" below).
 `tofu test` checks both cloud-inits.

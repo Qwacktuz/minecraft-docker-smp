@@ -757,6 +757,37 @@ class ServerTests(unittest.TestCase):
         self.assertEqual([argv[-1].rsplit("/", 1)[1] for argv in delete], ["77"])  # older ones go
         self.assertIn("mc-base snapshot 4243", result.stdout)
 
+    def test_weekly_image_rebuilds_only_after_play(self):
+        day = 86400
+        cases = [
+            # (last backup, image age in days, built?, deleted?, message)
+            (-2 * day, None, True, False, "ran 2 day(s) ago; rebuilding"),
+            (-2 * day, "8", True, False, "rebuilding"),
+            (-2 * day, "3", False, False, "only 3 day(s) old; keeping it"),
+            (-10 * day, "8", False, False, "nothing to do"),
+            (-40 * day, "35", False, True, "deleting the image"),
+            (-40 * day, None, False, False, "nothing to do"),
+        ]
+        for backup, age, built, deleted, message in cases:
+            with self.subTest(backup=backup, age=age):
+                flags = {"SNAP_TIME": iso(backup)}
+                if age:
+                    flags["BASE_IMAGE_AGE"] = age
+                result, calls = self.run_server("image", "--if-played", **flags)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(message, result.stdout)
+                self.assertEqual(bool(self.find(calls, "apply")), built)
+                self.assertEqual(bool(self.find(calls, "DELETE")) and not built, deleted)
+                # The last play comes from the VPS backups, read without a lock.
+                self.assertTrue(self.find(calls, "--no-lock snapshots --host mc-backup-worker"))
+
+    def test_github_reaches_a_vps_by_name_and_by_tailnet_address(self):
+        workflows = SERVER.parents[1] / ".github/workflows"
+        self.assertIn("Host mc-prod 100.*", (workflows / "server.yml").read_text())
+        image = (workflows / "image.yml").read_text()
+        self.assertIn("Host mc-staging 100.*", image)
+        self.assertIn("bin/server image --if-played", image)  # the weekly run checks first
+
     def test_image_refuses_while_staging_runs(self):
         result, calls = self.run_server("image", VPS="1")
         self.assertNotEqual(result.returncode, 0)
