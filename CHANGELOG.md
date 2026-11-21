@@ -15,8 +15,10 @@ See [docs/performance.md](docs/performance.md). Staging on Hetzner: a start take
 - `stop` checks the backups and publishes side by side after `down`.
 - The map is also published as one `map-state.tar`; a start downloads that
   instead of ~20,000 files (51 s → 17 s on a VPS).
-- `bin/server image` builds a pre-built `mc-base` Hetzner snapshot; a new VPS
-  starts from it when it is under 14 days old (untested on Hetzner).
+- `bin/server image` builds a pre-built `mc-base` Hetzner snapshot (2.17 GB,
+  about €0.03 a month); a new VPS starts from it when it is under 14 days old.
+  On staging: start 260 s → 191 s. A new VPS is reached by its tailnet
+  address, not its name.
 
 ## Unreleased: cheaper fallback types (2026-11-21)
 

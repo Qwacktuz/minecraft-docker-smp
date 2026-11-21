@@ -156,7 +156,8 @@ Rebuild it weekly, and after a Renovate image bump (the old images on it are
 only a cache: compose pulls the pinned ones anyway). Running it from CI is a
 follow-up.
 
-Not built on Hetzner yet (a snapshot costs about €0.01 per GB per month). `tofu test` checks both cloud-inits.
+Built and tested on 2026-11-21 (see "The pre-built image on Hetzner" below).
+`tofu test` checks both cloud-inits.
 
 ## Read-only findings
 
@@ -213,6 +214,41 @@ What this says:
   every 10 s instead of 2 s. No base-commit run on Hetzner was made: the old
   code has no staging target.
 
+## The pre-built image on Hetzner (2026-11-21)
+
+`bin/server image` built snapshot 459190063 in 289 s, then 459192202 in 187 s
+(the second build deleted the first one, so one is kept). Size: **2.17 GB**,
+about €0.03 a month in storage. A weekly rebuild adds about €0.065 a month
+(one cx33 hour each), so about €0.10 a month in all.
+
+| Phase (seconds) | debian-13 (median of 4) | Pre-built image (c8) |
+|---|---|---|
+| tofu-apply | 17 | 22 (creating from a snapshot is a little slower) |
+| tailnet | 117 (78 or 155) | **29** |
+| cloud-init | 1 | 7 |
+| **Before the deploy** | **135** | **58** |
+| image-pull | 9 | 2 |
+| deploy, in all | 118 | 129 (compose-up 68, the game's own start) |
+| **Whole start** | 260 | **191** |
+
+Two problems found on the first try, both fixed:
+
+- cloud-init ended "degraded" (exit 2) for "Skipping creation of existing
+  group 'docker'", and the start treated that as a failure. Now a baked
+  cloud-init skips the group, and exit 2 only warns.
+- The image had `tailscaled` disabled, so a reboot would have left the
+  tailnet. The image now only stops it, and cloud-init enables it.
+
+Also found: the VPS joined the tailnet at 15:23:24, but the laptop's first
+SSH by name got through at 15:24:15. `tailnet_wait` now asks the local
+Tailscale for the VPS's address and connects to that (with the name as a
+fallback). c8 was the first run with that change, so its 29 s include it.
+
+The fallback (`MC_BASE_IMAGE=none`, cycle 12) started from debian-13 and got
+as far as the deploy (image pull 11 s, no cache), but the laptop went to
+sleep during cycles 9–12, so their times are not usable. Keep-awake only
+stops idle sleep; a closed lid still sleeps.
+
 ## Cost ledger
 
 | Time (UTC) | Action | Type | €/h (incl. IPv4) | Hours billed | € |
@@ -223,7 +259,13 @@ What this says:
 | 10:57 | c3, stopped 11:02 | cx33 | 0.0152 | 1 | 0.015 |
 | 11:02 | c4, stopped 11:06 | cx33 | 0.0152 | 1 | 0.015 |
 | 11:08 | c5 (with the archive test), stopped 11:14 | cx33 | 0.0152 | 1 | 0.015 |
-| | **Total** (budget €0.50) | | | | **≈ 0.08** |
+| 15:14 | `image` build 1 | cx33 | 0.0152 | 1 | 0.015 |
+| 15:19, 15:22 | c6, c7 (first snapshot starts, cloud-init "degraded") | cx33 | 0.0152 | 2 | 0.030 |
+| 15:27 | `image` build 2 | cx33 | 0.0152 | 1 | 0.015 |
+| 15:31 | c8 (snapshot) | cx33 | 0.0152 | 1 | 0.015 |
+| 15:34–20:28 | c9–c12, stretched by laptop sleep | cx33 | 0.0152 | 7 | 0.106 |
+| | Snapshot storage, 2.17 GB, from now on | | | | ~0.03 a month |
+| | **Total** (budget €0.50) | | | | **≈ 0.26** |
 
 Prices: `web/wrangler.toml` (cx33 €0.0144/h) plus about €0.0008/h for the
 primary IPv4. Hetzner bills each started hour. A final sweep found nothing
@@ -248,7 +290,7 @@ everything worked. A new checkout or worktree needs the same.
 | `fix_owner` | passed | chown 0–1 s on the VPS |
 | Restore and map pull side by side | passed (laptop and staging) | |
 | Map archive | download path measured on a VPS (17 s vs 51 s); publish path unit-tested | the first real stop publishes it |
-| Pre-built image | untested | code, unit tests and `tofu test`; building one leaves a snapshot that costs per month, so it waits for the user |
+| Pre-built image | passed (one clean start, c8) | start 260 s → 191 s; the fallback reached the deploy, but without clean times |
 | Faster stop | untested on a VPS | a staging stop doesn't back up; unit tests only. The first real stop is its test |
 | Server type benchmark | skipped | budget €0.50 |
 | Vault copy | read-only finding | streams through the laptop; no change |
