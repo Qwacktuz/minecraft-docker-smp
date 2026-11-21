@@ -71,12 +71,12 @@ state.
 | Change | Where | Checked |
 |---|---|---|
 | Phase timings | bin/server, scripts/lib.sh, deploy.sh | unit tests; real local start |
-| Staging target | bin/server, infra/ | unit tests, `tofu test`; **not run on Hetzner** |
-| Tailscale checked every 2 s instead of 10 s (same 10-minute limit) | bin/server | unit tests; **not on a real VPS** |
+| Staging target | bin/server, infra/ | unit tests, `tofu test`, 5 staging runs |
+| Tailscale checked every 2 s instead of 10 s (same 10-minute limit) | bin/server | unit tests; staging |
 | Health check `start_interval: 5s` while starting (start_period and retries unchanged) | compose.yml | compose test; real local start |
 | `fix_owner` changes only files not owned by 1000:1000 | scripts/lib.sh | a real Docker volume; real local start |
 | restic restore and map pull side by side | deploy.sh | unit tests; real local start |
-| Stop: check and publishing side by side after `down` | bin/server | unit tests; **not on a real VPS** |
+| Stop: check and publishing side by side after `down` | bin/server | unit tests; **not on a real VPS** (a staging stop doesn't back up) |
 
 ### Faster stop
 
@@ -156,7 +156,7 @@ Rebuild it weekly, and after a Renovate image bump (the old images on it are
 only a cache: compose pulls the pinned ones anyway). Running it from CI is a
 follow-up.
 
-Untested on Hetzner (see below). `tofu test` checks both cloud-inits.
+Not built on Hetzner yet (a snapshot costs about €0.01 per GB per month). `tofu test` checks both cloud-inits.
 
 ## Read-only findings
 
@@ -169,47 +169,90 @@ Untested on Hetzner (see below). `tofu test` checks both cloud-inits.
   one key with access to both buckets, which the separate vault key exists
   to avoid. No change suggested.
 
+## Staging runs on Hetzner (2026-11-21, cx33 in hel1)
+
+Five `start staging` runs of this branch, four with timings (cycles 2–5;
+the first was started by hand and its output was lost). Each restored the
+newest backup (2974 files, 1.99 GiB) and the 1.7 GiB map file by file (there
+is no published archive yet: only a real stop publishes one).
+
+| Phase (seconds) | c2 | c3 | c4 | c5 | Median |
+|---|---|---|---|---|---|
+| tofu-apply | 19 | 15 | 19 | 14 | 17 |
+| tailnet (includes cloud-init's installs) | 78 | 155 | 78 | 156 | 117 |
+| cloud-init (left to wait for) | 1 | 1 | 2 | 0 | 1 |
+| deploy, in all | 128 | 119 | 117 | 118 | 118 |
+| · clone | 1 | 1 | 2 | 1 | 1 |
+| · image-pull | 9 | 10 | 8 | 9 | 9 |
+| · restic-restore | 11 | 10 | 11 | 11 | 11 |
+| · map-pull (side by side with the restore) | 52 | 51 | 51 | 52 | 51.5 |
+| · chown | 1 | 0 | 1 | 0 | 0.5 |
+| · compose-up (to healthy) | 56 | 47 | 46 | 47 | 47 |
+| **Whole start** | 228 | 293 | 218 | 292 | **260** |
+| Staging stop (down, destroy) | 23 | 23 | 40 | 20 | 23 |
+
+What this says:
+
+- **The biggest cost is cloud-init**: the "tailnet" phase is the wait until
+  the VPS answers over Tailscale, and cloud-init only joins the tailnet after
+  the apt upgrade and the Docker, Tailscale and SOPS installs. It is either
+  about 78 s or about 155 s (Debian's mirror on the day). The pre-built image
+  removes most of it.
+- **Then the map**: 51 s file by file, while the world restore takes 11 s
+  next to it. Measured on the same VPS (cycle 5), the map as one archive took
+  **17 s** (download 13 s, unpack 4 s). Building and uploading it at a stop
+  took 45 s (tar 12 s, upload 33 s), side by side with the integrity check.
+  So once a real stop has published the archive, a start should be about
+  35 s faster.
+- The game itself (compose-up) takes 47 s, of which the container's init
+  (Modrinth checks of 154 mods) is most; Fabric and the world load take a
+  few seconds ("Done (1.000s)").
+- On the base commit the restore and the map pull ran one after the other,
+  so the same start would take about 11 s longer (the restore's time), plus
+  up to 20 s waiting for the next health check, and the tailnet wait polled
+  every 10 s instead of 2 s. No base-commit run on Hetzner was made: the old
+  code has no staging target.
+
 ## Cost ledger
 
-| Time (UTC) | Action | Type | €/h | Hours billed | € |
+| Time (UTC) | Action | Type | €/h (incl. IPv4) | Hours billed | € |
 |---|---|---|---|---|---|
-| 00:10, 00:16 | 2 × `start staging`: tofu apply failed before any server was created | cx33 | 0.0144 | 0 | 0.00 |
-| | **Total** | | | | **0.00** |
+| 00:10, 00:16 | 2 × `start staging`: tofu apply failed (the firewall), nothing created | | | 0 | 0.00 |
+| 10:48 | c1, started by hand, stopped 10:52 | cx33 | 0.0152 | 1 | 0.015 |
+| 10:53 | c2, stopped 10:57 | cx33 | 0.0152 | 1 | 0.015 |
+| 10:57 | c3, stopped 11:02 | cx33 | 0.0152 | 1 | 0.015 |
+| 11:02 | c4, stopped 11:06 | cx33 | 0.0152 | 1 | 0.015 |
+| 11:08 | c5 (with the archive test), stopped 11:14 | cx33 | 0.0152 | 1 | 0.015 |
+| | **Total** (budget €0.50) | | | | **≈ 0.08** |
 
-## Why staging never ran: the laptop's firewall
+Prices: `web/wrangler.toml` (cx33 €0.0144/h) plus about €0.0008/h for the
+primary IPv4. Hetzner bills each started hour. A final sweep found nothing
+labelled `purpose=perf-staging` (servers, firewalls, SSH keys, images).
 
-Both `start staging` tries failed in `tofu apply` with
-`dial tcp 213.239.246.78:443: i/o timeout` (Hetzner) and the same for
-Tailscale's API. `curl` to the same address worked at the same time, and
-OpenTofu itself reached R2 (the state). The difference: the providers are
-separate programs, and this worktree downloaded its own copies into
-`/Users/kaktus/dev/mc-perf/infra/.terraform/providers/`. **LuLu** runs on the laptop, and it
-blocks new programs until someone allows them. That is very likely the cause.
-Nothing was created at Hetzner (checked with the API).
+## The laptop's firewall
 
-To unblock: allow the hcloud, tailscale and cloudflare providers under that
-path in LuLu (or run staging from a checkout whose providers are already
-allowed), then `bin/server start staging`. Changing firewall rules is the
-user's call, so it was left alone.
+The first two tries (00:10 and 00:16) failed in `tofu apply` with
+`dial tcp …:443: i/o timeout` to Hetzner and Tailscale, while `curl` worked.
+The cause was **LuLu** blocking this worktree's own copies of the OpenTofu
+providers (`infra/.terraform/providers/`). After the user allowed them,
+everything worked. A new checkout or worktree needs the same.
 
 ## State of every item
 
 | Item | State | Note |
 |---|---|---|
-| Phase timings | passed (laptop) | unit tests, real `start local` |
-| Staging target | untested on Hetzner | blocked by the firewall; unit tests and `tofu test` pass |
-| Baseline, 3 staging cycles | untested | same |
-| Tailscale every 2 s | untested on a VPS | unit tests |
-| Health check `start_interval` | passed (laptop) | |
-| `fix_owner` | passed | a real Docker volume, real `start local` |
-| Restore and map pull side by side | passed (laptop) | 196 s → 136 s |
-| Map archive | passed (laptop round trip) | 99 s → 36 s; deploy.sh's path is unit-tested only |
-| Pre-built image | untested | code, unit tests and `tofu test` only |
-| Faster stop | untested on a VPS | unit tests |
-| Server type benchmark | skipped | needs staging; and the budget was €0.50 |
+| Phase timings | passed (laptop and staging) | |
+| Staging target | passed | 5 starts and stops; DNS untouched; sweep clean |
+| Tailscale every 2 s | passed (staging) | |
+| Health check `start_interval` | passed (laptop and staging) | |
+| `fix_owner` | passed | chown 0–1 s on the VPS |
+| Restore and map pull side by side | passed (laptop and staging) | |
+| Map archive | download path measured on a VPS (17 s vs 51 s); publish path unit-tested | the first real stop publishes it |
+| Pre-built image | untested | code, unit tests and `tofu test`; building one leaves a snapshot that costs per month, so it waits for the user |
+| Faster stop | untested on a VPS | a staging stop doesn't back up; unit tests only. The first real stop is its test |
+| Server type benchmark | skipped | budget €0.50 |
 | Vault copy | read-only finding | streams through the laptop; no change |
-| Modrinth and Fabric start | measured (laptop) | init about 22 s, Fabric and world about 6 s |
-| `tofu plan` on the real VPS shows no changes | untested | `tofu test` with mocked providers only |
+| `tofu plan` on the real VPS shows no changes | untested | `tofu test` with mocked providers only. Run `bin/server tofu plan` once before merging |
 
-Also seen: **the real VPS was running** around 00:00 UTC on 2026-11-21
-(`start local` said "The VPS keeps running"). Nothing here touched it.
+Also seen: the real VPS was running around 00:00 UTC on 2026-11-21 and was
+gone by 10:40 (none at Hetzner). Nothing here touched it.

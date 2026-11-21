@@ -2,7 +2,7 @@
 
 ## Unreleased: faster starts and stops, staging (2026-11-21)
 
-See [docs/performance.md](docs/performance.md). Not yet run on a real VPS.
+See [docs/performance.md](docs/performance.md). Staging on Hetzner: a start takes about 260 s (median of 4).
 
 - Every start and stop prints its phases' times (`PHASE_LOG`, GitHub's step
   summary).
@@ -14,7 +14,7 @@ See [docs/performance.md](docs/performance.md). Not yet run on a real VPS.
   from 196 s to 136 s.
 - `stop` checks the backups and publishes side by side after `down`.
 - The map is also published as one `map-state.tar`; a start downloads that
-  instead of ~20,000 files (99 s → 36 s from the laptop).
+  instead of ~20,000 files (51 s → 17 s on a VPS).
 - `bin/server image` builds a pre-built `mc-base` Hetzner snapshot; a new VPS
   starts from it when it is under 14 days old (untested on Hetzner).
 
