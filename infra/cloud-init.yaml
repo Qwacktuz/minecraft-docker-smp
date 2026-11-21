@@ -2,8 +2,11 @@
 
 # The docker group exists before the user and before tailscaled starts:
 # Tailscale SSH sessions only get the groups a user had when tailscaled started.
+# (A pre-built image has it already.)
+%{ if !baked ~}
 groups:
   - docker
+%{ endif ~}
 
 users:
   - name: ${username}
@@ -68,6 +71,7 @@ runcmd:
 
   # Tailscale (installed above); restarted so the user's docker group applies.
   - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
+  - systemctl enable tailscaled
   - systemctl restart tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --hostname=${hostname} --reset
 

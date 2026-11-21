@@ -136,9 +136,35 @@ vps_exists() {
 # --- Where commands run --------------------------------------------------------
 
 # Tailscale authenticates the host, and every VPS is new, so don't pin host keys.
+# SSH_ADDR: $HOST's tailnet address once tailnet_wait has found it.
+SSH_ADDR=
 remote() {
   ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR \
-      -o ConnectTimeout=10 "$SSH_USER@$HOST" "$@"
+      -o ConnectTimeout=10 "$SSH_USER@${SSH_ADDR:-$HOST}" "$@"
+}
+# Waits up to 10 minutes until a new $HOST answers over Tailscale SSH. It asks
+# the local Tailscale for the address first: on the laptop the name took about
+# 50 s longer to work than the VPS took to join (docs/performance.md).
+tailnet_wait() {
+  local tries=0
+  while :; do
+    SSH_ADDR=$(tailscale ip -4 "$HOST" 2>/dev/null | grep -m1 -E '^100\.' || true)
+    remote true 2>/dev/null && return 0
+    if [[ -n "$SSH_ADDR" ]]; then SSH_ADDR=; remote true 2>/dev/null && return 0; fi
+    (( ++tries <= 300 )) || return 1
+    sleep 2
+  done
+}
+# `cloud_init_wait`: fails unless cloud-init finished; recoverable errors
+# (exit 2, e.g. "Skipping creation of existing group") only warn.
+cloud_init_wait() {
+  local status=0
+  remote "sudo cloud-init status --wait >/dev/null" || status=$?
+  case $status in
+    0) ;;
+    2) echo "warning: cloud-init on $HOST finished with recoverable errors ('cloud-init status --long' there)" >&2 ;;
+    *) return 1 ;;
+  esac
 }
 local_running() {
   command -v docker >/dev/null &&
@@ -335,16 +361,11 @@ start_vps() {
 
   say "Waiting for $HOST to join the tailnet..."
   phase tailnet
-  # Every 2 s, for up to 10 minutes.
-  local tries=0
-  until remote true 2>/dev/null; do
-    (( ++tries <= 300 )) || die "$HOST did not become reachable over Tailscale SSH"
-    sleep 2
-  done
+  tailnet_wait || die "$HOST did not become reachable over Tailscale SSH"
   # Separate session: the deploy must log in after cloud-init has added the
   # user to the docker group, or it can't reach the Docker socket.
   phase cloud-init
-  remote "sudo cloud-init status --wait >/dev/null" || die "cloud-init failed on $HOST"
+  cloud_init_wait || die "cloud-init failed on $HOST"
 
   say "Deploying ${sha:0:7}..."
   phase deploy
@@ -640,12 +661,8 @@ build_image() {
   export TF_VAR_staging_ssh_public_key MC_BASE_IMAGE=none
   say "Creating a temporary VPS to build the image on..."
   apply_vps
-  local tries=0
-  until remote true 2>/dev/null; do
-    (( ++tries <= 300 )) || { tf destroy -input=false -auto-approve || true; die "$HOST did not join the tailnet"; }
-    sleep 2
-  done
-  remote "sudo cloud-init status --wait >/dev/null" || { tf destroy -input=false -auto-approve || true; die "cloud-init failed"; }
+  tailnet_wait || { tf destroy -input=false -auto-approve || true; die "$HOST did not join the tailnet"; }
+  cloud_init_wait || { tf destroy -input=false -auto-approve || true; die "cloud-init failed"; }
   local images
   images=$( { sed -nE 's/^ *image: *([^ ]+).*/\1/p' compose.yml
               printf '%s\n' "$BACKUP_IMAGE" "$ALPINE_IMAGE" "$JAVA_IMAGE" "$RCLONE_IMAGE"; } | sort -u | tr '\n' ' ')
@@ -655,7 +672,7 @@ build_image() {
   say "Cleaning up for the snapshot..."
   # The SSH session ends when Tailscale goes, so the power-off is left running.
   remote "sudo sh -c 'apt-get clean; cloud-init clean --logs --machine-id; rm -f /etc/ssh/ssh_host_*;
-    tailscale logout; systemctl disable --now tailscaled; rm -rf /var/lib/tailscale/*;
+    tailscale logout; systemctl stop tailscaled; rm -rf /var/lib/tailscale/*;
     nohup sh -c \"sleep 2; poweroff\" >/dev/null 2>&1 &'" 2>/dev/null || true
   local id
   id=$(tf output -raw server_id)

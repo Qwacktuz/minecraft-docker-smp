@@ -96,7 +96,11 @@ elif name == "docker":
         sys.exit(1)
     if "snapshots" in args:
         snapshots()
+elif name == "tailscale" and args[:2] == ["ip", "-4"] and os.environ.get("TS_IP"):
+    print(os.environ["TS_IP"])
 elif name == "ssh":
+    if "cloud-init status --wait" in command and os.environ.get("CLOUD_INIT_EXIT"):
+        sys.exit(int(os.environ["CLOUD_INIT_EXIT"]))
     if "test -f" in command and not flag("WORLD_ON_VPS"):
         sys.exit(1)
     if "date -u +%s" in command:
@@ -196,7 +200,7 @@ class ServerTests(unittest.TestCase):
                          "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT", "STAGING", "PHASE_LOG",
                          "GITHUB_STEP_SUMMARY", "TF_VAR_staging", "TF_VAR_server_name",
                          "TF_VAR_staging_ssh_public_key", "TF_VAR_server_image", "TF_VAR_baked",
-                         "MC_BASE_IMAGE", "BASE_IMAGE_AGE", "BASE_MAX_DAYS"):
+                         "MC_BASE_IMAGE", "BASE_IMAGE_AGE", "BASE_MAX_DAYS", "TS_IP", "CLOUD_INIT_EXIT"):
             env.pop(variable, None)
         env["STAGING_KEY"] = str(root / "staging-key/id_ed25519")
         env.update({key: value for key, value in flags.items()})
@@ -761,6 +765,27 @@ class ServerTests(unittest.TestCase):
     def test_a_running_vps_never_changes_its_image(self):
         main = (SERVER.parents[1] / "infra/main.tf").read_text()
         self.assertRegex(main, r"ignore_changes = \[[^]]*\bimage\b")
+
+    def test_a_new_vps_is_reached_by_its_tailnet_address(self):
+        result, calls = self.run_server("start", "vps", TS_IP="100.64.0.7")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        ssh = [call["argv"] for call in calls if call["argv"][0] == "ssh"]
+        self.assertTrue(ssh)
+        for argv in ssh:
+            self.assertIn("deployer@100.64.0.7", argv)
+        # Without an answer from Tailscale, the name.
+        _, calls = self.run_server("start", "vps")
+        self.assertIn("deployer@mc-prod", next(c["argv"] for c in calls if c["argv"][0] == "ssh"))
+
+    def test_cloud_init_recoverable_errors_only_warn(self):
+        result, calls = self.run_server("start", "vps", CLOUD_INIT_EXIT="2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("recoverable errors", result.stderr)
+        self.assertTrue(self.find(calls, "scripts/deploy.sh"))
+        result, calls = self.run_server("start", "vps", CLOUD_INIT_EXIT="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cloud-init failed", result.stderr)
+        self.assertFalse(self.find(calls, "scripts/deploy.sh"))
 
     def test_unknown_command_shows_usage(self):
         result, _ = self.run_server("launch")

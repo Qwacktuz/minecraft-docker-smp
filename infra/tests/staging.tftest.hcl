@@ -93,6 +93,10 @@ run "baked_image_skips_the_installs" {
     error_message = "A pre-built image skips the apt upgrade, the installs and SOPS."
   }
   assert {
+    condition     = !strcontains(data.cloudinit_config.minecraft_cfg.rendered, "groups:\n  - docker")
+    error_message = "A pre-built image already has the docker group (cloud-init would report it as degraded)."
+  }
+  assert {
     condition     = strcontains(data.cloudinit_config.minecraft_cfg.rendered, "tailscale up") && strcontains(data.cloudinit_config.minecraft_cfg.rendered, "ufw --force enable") && strcontains(data.cloudinit_config.minecraft_cfg.rendered, "PasswordAuthentication no")
     error_message = "A pre-built image still joins the tailnet, hardens SSH and sets the firewall."
   }
