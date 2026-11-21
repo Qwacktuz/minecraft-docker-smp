@@ -19,6 +19,9 @@ swap:
   size: 2G
   maxsize: 2147483648
 
+# A pre-built mc-base snapshot (bin/server image, baked = true) already has
+# Docker, Tailscale, SOPS and the upgrades; the rest below runs on both.
+%{ if !baked ~}
 # Docker and Tailscale come from their signed apt repositories. The signing
 # keys are in infra/keys/ (fingerprints in the comments), so nothing is piped
 # from the internet into a shell.
@@ -49,6 +52,7 @@ packages:
   - docker-compose-plugin
   - tailscale
 
+%{ endif ~}
 write_files:
   - path: /etc/ssh/sshd_config.d/minecraft-hardening.conf
     content: |
@@ -67,6 +71,7 @@ runcmd:
   - systemctl restart tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --hostname=${hostname} --reset
 
+%{ if !baked ~}
   # SOPS, checked against the release's SHA-256 for this CPU architecture.
   - |
     set -e
@@ -80,6 +85,7 @@ runcmd:
     echo "$sum  /tmp/sops" | sha256sum -c -
     install -m 755 /tmp/sops /usr/local/bin/sops
 
+%{ endif ~}
   # Apply SSH Hardening Config
   - systemctl reload sshd || systemctl reload ssh
 

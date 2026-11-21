@@ -79,3 +79,30 @@ run "staging_needs_its_own_key" {
 
   expect_failures = [hcloud_ssh_key.deploy_key]
 }
+
+run "baked_image_skips_the_installs" {
+  command = apply # mocked providers: nothing real is created; the cloud-init is known only then
+
+  variables {
+    server_image = "4242"
+    baked        = true
+  }
+
+  assert {
+    condition     = !strcontains(data.cloudinit_config.minecraft_cfg.rendered, "package_upgrade") && !strcontains(data.cloudinit_config.minecraft_cfg.rendered, "sops-v")
+    error_message = "A pre-built image skips the apt upgrade, the installs and SOPS."
+  }
+  assert {
+    condition     = strcontains(data.cloudinit_config.minecraft_cfg.rendered, "tailscale up") && strcontains(data.cloudinit_config.minecraft_cfg.rendered, "ufw --force enable") && strcontains(data.cloudinit_config.minecraft_cfg.rendered, "PasswordAuthentication no")
+    error_message = "A pre-built image still joins the tailnet, hardens SSH and sets the firewall."
+  }
+}
+
+run "debian_image_installs_everything" {
+  command = apply # mocked providers: nothing real is created; the cloud-init is known only then
+
+  assert {
+    condition     = strcontains(data.cloudinit_config.minecraft_cfg.rendered, "package_upgrade: true") && strcontains(data.cloudinit_config.minecraft_cfg.rendered, "sops-v3")
+    error_message = "Without a pre-built image, cloud-init installs everything as before."
+  }
+}

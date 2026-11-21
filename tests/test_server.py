@@ -24,7 +24,8 @@ stdin = "" if sys.stdin.isatty() else sys.stdin.read()
 with open(os.environ["MOCK_LOG"], "a") as log:
     log.write(json.dumps({"argv": [name, *args], "stdin": stdin,
                           "tf_vars": {k[7:]: v for k, v in os.environ.items() if k.startswith("TF_VAR_")
-                                      and k[7:] in ("staging", "server_name", "staging_ssh_public_key")}}) + "\n")
+                                      and k[7:] in ("staging", "server_name", "staging_ssh_public_key",
+                                                    "server_image", "baked")}}) + "\n")
 command = " ".join(args)
 
 def snapshots():
@@ -71,7 +72,7 @@ if name == "tofu":
     if "state" in args and flag("VPS"):
         print("hcloud_server.minecraft")
     if "output" in args:
-        print({"server_type": "cx33", "server_location": "hel1"}.get(args[-1], "192.0.2.1"))
+        print({"server_type": "cx33", "server_location": "hel1", "server_id": "123"}.get(args[-1], "192.0.2.1"))
     if "apply" in args:
         # SOLD_OUT="cx33 cpx32@fsn1 ...": Hetzner can't place these types (everywhere,
         # or only in that location). APPLY_FAIL: any other error.
@@ -120,6 +121,23 @@ elif name == "ssh":
         sys.exit(1)
     if "scripts/prune.sh" in command and flag("PRUNE_FAIL"):
         sys.exit(1)
+elif name == "curl" and "api.hetzner.cloud" in command:
+    # BASE_IMAGE_AGE: the newest mc-base snapshot is that many days old.
+    path = args[-1].split("/v1", 1)[1]
+    if path.startswith("/images?"):
+        images = []
+        if os.environ.get("BASE_IMAGE_AGE"):
+            created = time.gmtime(time.time() - float(os.environ["BASE_IMAGE_AGE"]) * 86400)
+            images = [{"id": 4242, "created": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", created)}]
+        if "sort=" not in path:
+            images.append({"id": 77, "created": "2026-01-01T00:00:00+00:00"})
+        print(json.dumps({"images": images}))
+    elif path.startswith("/servers/") and "actions" not in path:
+        print(json.dumps({"server": {"status": "off"}}))
+    elif path.endswith("/actions/create_image"):
+        print(json.dumps({"image": {"id": 4243}, "action": {"id": 5}}))
+    elif path.startswith("/actions/"):
+        print(json.dumps({"action": {"status": "success"}}))
 elif name == "git":
     if "rev-parse" in args:
         print("0123456789abcdef0123456789abcdef01234567")
@@ -152,6 +170,7 @@ class ServerTests(unittest.TestCase):
             f"AUTO_PRUNE_DAYS={flags.pop('AUTO_PRUNE_DAYS', '0')}\n"
             f"PRUNE_KEEP_SNAPSHOTS={flags.pop('PRUNE_KEEP', '2')}\n")
         shutil.copy(SERVER, root / "bin/server")
+        shutil.copy(SERVER.parents[1] / "compose.yml", root / "compose.yml")
         for script in ("lib.sh", "snapshots.py", "regions.py", "test-backup.sh"):
             shutil.copy(SERVER.parents[1] / "scripts" / script, root / "scripts" / script)
         # Stand-in deploy script: records the settings bin/server hands it.
@@ -176,7 +195,8 @@ class ServerTests(unittest.TestCase):
         for variable in ("TS_HOST", "SSH_USER", "REPO", "RESTORE", "SERVER_TYPES", "SERVER_LOCATIONS", "GITHUB_RUN_ID", "GITHUB_REPOSITORY", "BACKUP_PING_URL", "HEALTHCHECKS_API_KEY",
                          "RESTIC_SOURCE", "VAULT_BUCKET", "R2_ENDPOINT", "STAGING", "PHASE_LOG",
                          "GITHUB_STEP_SUMMARY", "TF_VAR_staging", "TF_VAR_server_name",
-                         "TF_VAR_staging_ssh_public_key"):
+                         "TF_VAR_staging_ssh_public_key", "TF_VAR_server_image", "TF_VAR_baked",
+                         "MC_BASE_IMAGE", "BASE_IMAGE_AGE", "BASE_MAX_DAYS"):
             env.pop(variable, None)
         env["STAGING_KEY"] = str(root / "staging-key/id_ed25519")
         env.update({key: value for key, value in flags.items()})
@@ -692,6 +712,55 @@ class ServerTests(unittest.TestCase):
         result, _ = self.run_server("stop", VPS="1", GITHUB_STEP_SUMMARY=str(summary))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertRegex(summary.read_text(), r"(?m)^\| backup \| \d+s \|$")
+
+    # --- The pre-built image ---------------------------------------------------
+
+    def test_a_new_vps_starts_from_a_recent_base_image(self):
+        result, calls = self.run_server("start", "vps", BASE_IMAGE_AGE="3")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        apply = calls[self.find(calls, "apply")[0]]
+        self.assertEqual(apply["tf_vars"].get("server_image"), "4242")
+        self.assertEqual(apply["tf_vars"].get("baked"), "true")
+        for call in calls:  # the Hetzner token never appears in arguments
+            self.assertNotIn("decrypted", " ".join(call["argv"]))
+
+    def test_an_old_or_missing_base_image_falls_back_to_debian(self):
+        for flags in ({"BASE_IMAGE_AGE": "20"}, {}, {"BASE_IMAGE_AGE": "1", "MC_BASE_IMAGE": "none"}):
+            with self.subTest(**flags):
+                result, calls = self.run_server("start", "vps", **flags)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                apply = calls[self.find(calls, "apply")[0]]
+                self.assertNotIn("server_image", apply["tf_vars"])
+
+    def test_image_builds_on_a_staging_vps_snapshots_and_deletes_it(self):
+        result, calls = self.run_server("image")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        apply = calls[self.find(calls, "apply")[0]]
+        self.assertEqual(apply["tf_vars"]["server_name"], "mc-staging")
+        self.assertNotIn("server_image", apply["tf_vars"])  # always from debian-13
+        pull = " ".join(calls[self.find(calls, "docker pull")[0]]["argv"])
+        for image in ("itzg/minecraft-server:", "itzg/mc-backup:", "alpine:", "eclipse-temurin:", "rclone/rclone:"):
+            self.assertIn(image, pull)
+        clean = self.find(calls, "cloud-init clean")[0]
+        snapshot = self.find(calls, "create_image")[0]
+        self.assertIn("--machine-id", " ".join(calls[clean]["argv"]))
+        body = json.loads(calls[snapshot]["argv"][calls[snapshot]["argv"].index("--data-binary") + 1])
+        self.assertEqual(body["labels"]["mc-base"], "1")
+        destroy = self.find(calls, "destroy")[0]
+        self.assertLess(clean, snapshot)
+        self.assertLess(snapshot, destroy)
+        delete = [calls[i]["argv"] for i in self.find(calls, "DELETE")]
+        self.assertEqual([argv[-1].rsplit("/", 1)[1] for argv in delete], ["77"])  # older ones go
+        self.assertIn("mc-base snapshot 4243", result.stdout)
+
+    def test_image_refuses_while_staging_runs(self):
+        result, calls = self.run_server("image", VPS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.find(calls, "apply"))
+
+    def test_a_running_vps_never_changes_its_image(self):
+        main = (SERVER.parents[1] / "infra/main.tf").read_text()
+        self.assertRegex(main, r"ignore_changes = \[[^]]*\bimage\b")
 
     def test_unknown_command_shows_usage(self):
         result, _ = self.run_server("launch")

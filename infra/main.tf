@@ -38,6 +38,7 @@ data "cloudinit_config" "minecraft_cfg" {
     content = templatefile("${path.module}/cloud-init.yaml", {
       ts_authkey  = tailscale_tailnet_key.server_key.key
       hostname    = var.server_name
+      baked       = var.baked
       username    = var.username
       ssh_pub_key = var.ssh_public_key
       # apt signing keys for Docker and Tailscale (fingerprints in cloud-init.yaml)
@@ -100,6 +101,8 @@ resource "hcloud_server" "minecraft" {
     # So do the type and location: bin/server falls back to others when Hetzner
     # has no capacity (SERVER_TYPES, SERVER_LOCATIONS), and a running VPS must
     # never be resized or moved.
-    ignore_changes = [user_data, server_type, location]
+    # The image too: a newer pre-built snapshot (bin/server image) is for the
+    # next VPS, never a reason to replace the running one.
+    ignore_changes = [user_data, server_type, location, image]
   }
 }

@@ -13,6 +13,8 @@
 #                            backup: read-only toward R2, no DNS, no publishing,
 #                            no Discord. Its own state (staging/terraform.tfstate).
 #   bin/server stop staging  delete the staging VPS (nothing is backed up)
+#   bin/server image         build the pre-built mc-base Hetzner snapshot that new
+#                            VPSs start from (rebuild weekly, or after an image bump)
 #   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
 #   bin/server vault         copy the backups into the locked vault bucket now
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
@@ -49,7 +51,7 @@ HOST=${TS_HOST:-mc-prod}                 # Tailscale name; infra var.server_name
 # Staging (`start staging`, `stop staging`, or STAGING=1 for `tofu`): a second
 # VPS named mc-staging with its own OpenTofu state, for measuring changes
 # (docs/performance.md). It never touches the real world's VPS, DNS or backups.
-if [[ "${1:-}" =~ ^(start|stop)$ && "${2:-}" == staging ]]; then export STAGING=1; fi
+if [[ "${1:-}" =~ ^(start|stop)$ && "${2:-}" == staging || "${1:-}" == image ]]; then export STAGING=1; fi
 if [[ "${STAGING:-}" == 1 ]]; then
   HOST=mc-staging
   export TF_VAR_staging=true TF_VAR_server_name=$HOST
@@ -326,6 +328,7 @@ start_vps() {
   fi
 
   NOTIFY_FAILURE=start
+  use_base_image
   say "Creating or updating the VPS..."
   phase tofu-apply
   apply_vps
@@ -587,6 +590,103 @@ stop_staging() {
     tf destroy -input=false -auto-approve
   phase
   say "Staging deleted."
+}
+
+# --- The pre-built image (docs/performance.md) ---------------------------------
+
+# A new VPS starts from the newest mc-base snapshot when it is younger than
+# BASE_MAX_DAYS: Docker, Tailscale, SOPS, the upgrades and every pinned image
+# are already on it, so cloud-init only writes the user, SSH and firewall
+# settings and joins the tailnet. Otherwise (or with MC_BASE_IMAGE=none) it
+# starts from Hetzner's debian-13 and cloud-init installs everything, as before.
+# A running VPS keeps its image (ignore_changes in infra/main.tf).
+BASE_MAX_DAYS=${BASE_MAX_DAYS:-14}
+use_base_image() {
+  [[ "${MC_BASE_IMAGE:-}" == none ]] && return 0
+  local image
+  image=$(secrets infra _base-image 2>/dev/null) || image=
+  if [[ "$image" =~ ^[0-9]+$ ]]; then
+    export TF_VAR_server_image=$image TF_VAR_baked=true
+    say "A new VPS starts from the pre-built image $image."
+  fi
+}
+# `hcloud_api <method> <path> [json]`, under `secrets infra`. The token goes to
+# curl in a config on stdin, never in its arguments.
+# shellcheck disable=SC2154 # TF_VAR_hcloud_token comes from sops exec-env
+hcloud_api() {
+  local data=()
+  [[ -n "${3:-}" ]] && data=(-H 'content-type: application/json' --data-binary "$3")
+  printf 'header = "Authorization: Bearer %s"\n' "$TF_VAR_hcloud_token" |
+    curl -fsS -m 30 -K - -X "$1" ${data[@]+"${data[@]}"} "https://api.hetzner.cloud/v1$2"
+}
+# Prints the ID of the newest mc-base snapshot younger than BASE_MAX_DAYS.
+base_image_id() {
+  hcloud_api GET "/images?type=snapshot&label_selector=mc-base%3D1&sort=created:desc" |
+    jq -r --argjson max "$((BASE_MAX_DAYS * 86400))" \
+      '.images[0] // empty | select(now - (.created | sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) < $max) | .id'
+}
+
+# Builds the image on a temporary staging VPS: the normal cloud-init install,
+# then every pinned image pulled, then cloud-init, the machine ID, the SSH host
+# keys and Tailscale's state wiped, a snapshot taken, and the VPS deleted.
+build_image() {
+  need ssh-keygen jq
+  vps_exists && die "the staging VPS runs; 'bin/server stop staging' first"
+  if [[ ! -f "$STAGING_KEY.pub" ]]; then
+    mkdir -p "$(dirname "$STAGING_KEY")"
+    ssh-keygen -q -t ed25519 -N '' -C mc-staging -f "$STAGING_KEY"
+  fi
+  TF_VAR_staging_ssh_public_key=$(cat "$STAGING_KEY.pub")
+  export TF_VAR_staging_ssh_public_key MC_BASE_IMAGE=none
+  say "Creating a temporary VPS to build the image on..."
+  apply_vps
+  local tries=0
+  until remote true 2>/dev/null; do
+    (( ++tries <= 300 )) || { tf destroy -input=false -auto-approve || true; die "$HOST did not join the tailnet"; }
+    sleep 2
+  done
+  remote "sudo cloud-init status --wait >/dev/null" || { tf destroy -input=false -auto-approve || true; die "cloud-init failed"; }
+  local images
+  images=$( { sed -nE 's/^ *image: *([^ ]+).*/\1/p' compose.yml
+              printf '%s\n' "$BACKUP_IMAGE" "$ALPINE_IMAGE" "$JAVA_IMAGE" "$RCLONE_IMAGE"; } | sort -u | tr '\n' ' ')
+  say "Pulling the pinned images..."
+  remote "for image in $images; do docker pull -q \"\$image\" || exit 1; done" ||
+    { tf destroy -input=false -auto-approve || true; die "could not pull the images"; }
+  say "Cleaning up for the snapshot..."
+  # The SSH session ends when Tailscale goes, so the power-off is left running.
+  remote "sudo sh -c 'apt-get clean; cloud-init clean --logs --machine-id; rm -f /etc/ssh/ssh_host_*;
+    tailscale logout; systemctl disable --now tailscaled; rm -rf /var/lib/tailscale/*;
+    nohup sh -c \"sleep 2; poweroff\" >/dev/null 2>&1 &'" 2>/dev/null || true
+  local id
+  id=$(tf output -raw server_id)
+  secrets infra _snapshot "$id" || { tf destroy -input=false -auto-approve || true; die "the snapshot failed"; }
+  tf destroy -input=false -auto-approve
+  say "Built the mc-base image. New VPSs start from it for $BASE_MAX_DAYS days."
+}
+# `_snapshot <server-id>` (under `secrets infra`): waits until the server is
+# off, snapshots it with the labels mc-base=1 and built=<date>, waits for the
+# snapshot, and deletes older mc-base snapshots (one is kept).
+snapshot_server() {
+  local id=$1 tries=0 json image action status old
+  [[ "$id" =~ ^[0-9]+$ ]] || die "not a server ID: $id"
+  until [[ "$(hcloud_api GET "/servers/$id" | jq -r .server.status)" == off ]]; do
+    (( ++tries <= 60 )) || die "server $id did not power off"
+    sleep 5
+  done
+  json=$(hcloud_api POST "/servers/$id/actions/create_image" \
+    "$(jq -nc --arg built "$(date -u +%Y-%m-%d)" '{type: "snapshot", description: "mc-base", labels: {"mc-base": "1", built: $built}}')")
+  image=$(jq -r .image.id <<< "$json")
+  action=$(jq -r .action.id <<< "$json")
+  tries=0
+  while status=$(hcloud_api GET "/actions/$action" | jq -r .action.status) && [[ "$status" == running ]]; do
+    (( ++tries <= 180 )) || die "the snapshot did not finish"
+    sleep 10
+  done
+  [[ "$status" == success ]] || die "the snapshot failed ($status)"
+  for old in $(hcloud_api GET "/images?type=snapshot&label_selector=mc-base%3D1" | jq -r --arg keep "$image" '.images[] | select((.id | tostring) != $keep) | .id'); do
+    hcloud_api DELETE "/images/$old" >/dev/null || echo "warning: could not delete the old snapshot $old" >&2
+  done
+  echo "mc-base snapshot $image"
 }
 
 # Reads command output on stdin and records its "--- <name> <seconds>s" lines
@@ -921,6 +1021,7 @@ case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
   "start staging") start_staging ;;
+  "image "*) build_image ;;
   "stop "*) stop "${2:-}" ;;
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
@@ -945,6 +1046,8 @@ case "${1:-} ${2:-}" in
   "_watchdog-deploy "*) watchdog_deploy ;;
   "_web-deploy "*) web_deploy ;;
   "_restic "*) shift; restic "$@" ;;
+  "_base-image "*) base_image_id ;;
+  "_snapshot "*) snapshot_server "$2" ;;
   "_check "*) RESTIC_NO_LOCK=1 APP_DIR="$ROOT" bash "$ROOT/scripts/test-backup.sh" "$2" ;;
   "_deploy "*) bash "$ROOT/scripts/deploy.sh" ;;
   *) usage 1 >&2 ;;

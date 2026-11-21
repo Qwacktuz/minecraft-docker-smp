@@ -78,6 +78,12 @@ variable "server_image" {
   default     = "debian-13"
 }
 
+variable "baked" {
+  description = "server_image is a pre-built mc-base snapshot (bin/server image): cloud-init skips the apt upgrade, the installs and SOPS"
+  type        = bool
+  default     = false
+}
+
 variable "server_location" {
   description = "Datacenter location for a new VPS; bin/server passes it from SERVER_LOCATIONS"
   type        = string
