@@ -21,6 +21,8 @@ with open(os.environ["MOCK_LOG"], "a") as log:
     log.write(json.dumps({"argv": args, "keys": keys}) + "\n")
 if args[:2] == ["compose", "ps"] and os.environ.get("GAME_RUNNING"):
     print("minecraft-service")
+if "copyto" in args and "r2:pub/map-state.tar" in args and os.environ.get("ARCHIVE_FAIL"):
+    sys.exit(1)
 '''
 ENV = ("R2_ENDPOINT=https://r2.invalid\nR2_ACCESS_KEY_ID=key-id\n"
        "R2_SECRET_ACCESS_KEY=secret-key\n")
@@ -66,7 +68,6 @@ class PublishTests(unittest.TestCase):
     def test_publishes_the_web_map_under_map(self):
         app, result, runs = self.run_script("publish-map.sh")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(runs), 1)
         argv = runs[0]["argv"]
         self.assertIn(f"{app}/data/minecraft/bluemap/web:/work:ro", argv)
         image = next(arg for arg in argv if arg.startswith("rclone/rclone:"))
@@ -77,6 +78,31 @@ class PublishTests(unittest.TestCase):
         # The browser decompresses the tiles; a Content-Encoding header would break that.
         self.assertNotIn("Content-Encoding", " ".join(rclone))
         self.assert_keys_by_name_only(runs[0])
+
+    def test_publishes_the_same_files_as_one_archive_after_them(self):
+        app, result, runs = self.run_script("publish-map.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(runs), 3)  # the files, the tar, its upload
+        tar = runs[1]["argv"]
+        self.assertIn(f"{app}/data/minecraft/bluemap/web:/work:ro", tar)
+        self.assertIn("--user", tar)  # the archive belongs to the deploy user
+        image = next(arg for arg in tar if arg.startswith("alpine:"))
+        self.assertEqual(tar[tar.index(image) + 1:tar.index(image) + 4], ["tar", "-C", "/work"])
+        self.assertIn("sql.php", tar)
+        upload = runs[2]["argv"]
+        image = next(arg for arg in upload if arg.startswith("rclone/rclone:"))
+        self.assertEqual(upload[upload.index(image) + 1:upload.index(image) + 4],
+                         ["copyto", "/work/map-state.tar", "r2:pub/map-state.tar"])
+        self.assert_keys_by_name_only(runs[2])
+        self.assertFalse((app / ".cache/map-state.tar").exists())
+
+    def test_a_failed_archive_upload_deletes_the_old_one(self):
+        _, result, runs = self.run_script("publish-map.sh", ARCHIVE_FAIL="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not publish the map archive", result.stderr)
+        last = runs[-1]["argv"]
+        self.assertIn("deletefile", last)
+        self.assertIn("r2:pub/map-state.tar", last)
 
     def test_skips_without_a_bucket_or_a_map(self):
         _, result, runs = self.run_script("publish-map.sh", bucket="")

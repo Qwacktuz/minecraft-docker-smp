@@ -130,6 +130,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 6m
+      # Checked every 5 s while starting, so `up --wait` returns soon after the
+      # game is ready instead of up to 20 s later (Docker Engine 25+).
+      start_interval: 5s
     deploy:
       resources:
         limits:
