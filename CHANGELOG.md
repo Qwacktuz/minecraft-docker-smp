@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased: faster starts and stops, staging (2026-11-21)
+
+See [docs/performance.md](docs/performance.md). Not yet run on a real VPS.
+
+- Every start and stop prints its phases' times (`PHASE_LOG`, GitHub's step
+  summary).
+- `bin/server start staging` / `stop staging`: a throwaway `mc-staging` VPS
+  with its own state, no DNS, read-only toward R2, silent on Discord.
+- `deploy.sh` restores the world and pulls the map side by side; `fix_owner`
+  only changes files with another owner. Tailscale is checked every 2 s; the
+  health check polls every 5 s while starting. A laptop `start local` went
+  from 196 s to 136 s.
+- `stop` checks the backups and publishes side by side after `down`.
+
 ## Unreleased: cheaper fallback types (2026-11-21)
 
 - `SERVER_TYPES` defaults to `cx33 cx43 cx53 cpx32`. At Hetzner's prices
