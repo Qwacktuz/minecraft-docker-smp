@@ -76,6 +76,14 @@ class ComposeTests(unittest.TestCase):
         self.assertIn('. "$ROOT/scripts/lib.sh"', server)
         self.assertNotIn("WORLD_HOST=", server)
 
+    def test_the_health_check_polls_fast_while_starting(self):
+        result = self.render()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        check = json.loads(result.stdout)["services"]["minecraft-service"]["healthcheck"]
+        self.assertEqual(check["start_interval"], "5s")
+        # Only the polling while starting changed: the grace and retries stay.
+        self.assertEqual((check["start_period"], check["retries"], check["interval"]), ("6m0s", 5, "20s"))
+
     def test_every_image_is_pinned_by_digest(self):
         services = json.loads(self.render().stdout)["services"]
         for name, service in services.items():

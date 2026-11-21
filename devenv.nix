@@ -64,6 +64,7 @@
       tofu -chdir=infra fmt -check
       tofu -chdir=infra init -backend=false -lockfile=readonly >/dev/null
       tofu -chdir=infra validate
+      tofu -chdir=infra test # mocked providers: the real VPS's plan and staging's
     '';
   };
 

@@ -10,6 +10,7 @@ SERVICE=minecraft-service
 ENV_FILE=$(mktemp "$APP_DIR/.env.XXXXXX")
 trap 'rm -f -- "$ENV_FILE"' EXIT
 
+phase decrypt
 echo "Preparing runtime configuration..."
 sops --decrypt --output-type dotenv secrets/app.enc.env > "$ENV_FILE"
 if [[ ! -s "$ENV_FILE" ]]; then
@@ -29,12 +30,35 @@ if [[ "${BACKUPS:-}" == 1 ]]; then
   echo "COMPOSE_PROFILES=backup" >> "$ENV_FILE"
 fi
 
+# `map_pull <bucket>`: the map archive in one download, or, without one, the
+# files one by one.
+map_pull() {
+  local web=/data/minecraft/${MAP_WEB#data/minecraft/}
+  # rclone copyto exits 0 when there is no archive, so check that it arrived.
+  if r2_rclone root "$APP_DIR/data:/data" copyto "r2:$1/$MAP_ARCHIVE" "/data/$MAP_ARCHIVE" \
+       --multi-thread-streams 8 --stats-one-line --stats 1m 2>/dev/null &&
+     [[ -f "$APP_DIR/data/$MAP_ARCHIVE" ]]; then
+    # shellcheck disable=SC2016 # expanded in the container
+    if docker run --rm -v "$APP_DIR/data:/data" -e WEB="$web" -e ARCHIVE="/data/$MAP_ARCHIVE" "$ALPINE_IMAGE" \
+         sh -c 'mkdir -p "$WEB" && tar -C "$WEB" -xf "$ARCHIVE"; status=$?; rm -f "$ARCHIVE"; exit $status'; then
+      echo "Unpacked the map archive."
+      return 0
+    fi
+    echo "warning: could not unpack the map archive; pulling the files instead" >&2
+  fi
+  r2_rclone root "$APP_DIR/data/minecraft:/data" \
+    copy "r2:$1/$MAP_PREFIX" "/data/${MAP_WEB#data/minecraft/}" \
+    --fast-list --transfers 32 --stats-one-line --stats 1m
+}
+
 compose=(docker compose --env-file "$ENV_FILE")
 "${compose[@]}" config --quiet
 
+phase image-pull
 echo "Pulling images before interrupting the server..."
 "${compose[@]}" pull
 
+phase
 running_services=$("${compose[@]}" ps --services --filter status=running)
 if grep -Fxq "$SERVICE" <<< "$running_services"; then
   "${compose[@]}" exec -T "$SERVICE" rcon-cli "say System update in 5 seconds..." || true
@@ -72,20 +96,31 @@ if [[ -n "${RESTORE:-}" ]]; then
     mkdir -p data
     docker run --rm -v "$APP_DIR/data:/d" "$ALPINE_IMAGE" sh -c \
       'rm -rf /d/minecraft.previous; if [ -d /d/minecraft ]; then mv /d/minecraft /d/minecraft.previous; fi; mkdir -p /d/minecraft'
-    restic --no-lock restore "$snapshot" --host "$WORLD_HOST" --target /
+    # The world and the map run side by side: the backups exclude bluemap/, so
+    # they never write the same files.
+    timed restic-restore restic --no-lock restore "$snapshot" --host "$WORLD_HOST" --target / &
+    restore_job=$!
     # BlueMap's tiles and render state aren't in the backups; they live in the
     # public bucket (scripts/publish-map.sh). Without them BlueMap renders the
     # whole world again, so a failed pull only warns.
     # shellcheck disable=SC1091
     public_bucket=$(set -a; . ./.env; echo "${PUBLIC_WORLD_BUCKET:-}")
+    map_job=
     if [[ -n "$public_bucket" ]]; then
       echo "Pulling the published map (BlueMap then renders only what changed)..."
-      r2_rclone root "$APP_DIR/data/minecraft:/data" \
-        copy "r2:$public_bucket/$MAP_PREFIX" "/data/${MAP_WEB#data/minecraft/}" \
-        --fast-list --transfers 32 --stats-one-line --stats 1m ||
-        echo "warning: could not pull the published map; BlueMap renders it from scratch" >&2
+      timed map-pull map_pull "$public_bucket" &
+      map_job=$!
     fi
-    fix_owner
+    restore_status=0
+    wait "$restore_job" || restore_status=$?
+    if [[ -n "$map_job" ]] && ! wait "$map_job"; then
+      echo "warning: could not pull the published map; BlueMap renders it from scratch" >&2
+    fi
+    if (( restore_status != 0 )); then
+      echo "ERROR: The restore of $snapshot failed (exit $restore_status)." >&2
+      exit 1
+    fi
+    timed chown fix_owner
   fi
 fi
 
@@ -96,6 +131,7 @@ if [[ ! -f data/minecraft/world/level.dat && "${NEW_WORLD:-}" != 1 ]]; then
   exit 1
 fi
 
+phase compose-up
 echo "Updating containers and waiting for health checks..."
 if ! "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 600; then
   "${compose[@]}" ps >&2 || true
@@ -103,5 +139,6 @@ if ! "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 600; then
   exit 1
 fi
 
+phase
 "${compose[@]}" exec -T "$SERVICE" rcon-cli "say Deployment complete." || true
 echo "Deployment completed; Minecraft health check passed."

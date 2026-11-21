@@ -78,9 +78,27 @@ variable "server_image" {
   default     = "debian-13"
 }
 
+variable "baked" {
+  description = "server_image is a pre-built mc-base snapshot (bin/server image): cloud-init skips the apt upgrade, the installs and SOPS"
+  type        = bool
+  default     = false
+}
+
 variable "server_location" {
   description = "Datacenter location for a new VPS; bin/server passes it from SERVER_LOCATIONS"
   type        = string
   default     = "hel1"
 }
 
+
+variable "staging" {
+  description = "A staging VPS (bin/server start staging): no DNS, its own SSH key and firewall, labelled purpose=perf-staging"
+  type        = bool
+  default     = false
+}
+
+variable "staging_ssh_public_key" {
+  description = "The staging VPS's Hetzner SSH key (bin/server creates it; Hetzner refuses a duplicate of ssh_public_key)"
+  type        = string
+  default     = ""
+}

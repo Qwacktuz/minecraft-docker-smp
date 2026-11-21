@@ -2,8 +2,11 @@
 
 # The docker group exists before the user and before tailscaled starts:
 # Tailscale SSH sessions only get the groups a user had when tailscaled started.
+# (A pre-built image has it already.)
+%{ if !baked ~}
 groups:
   - docker
+%{ endif ~}
 
 users:
   - name: ${username}
@@ -19,6 +22,9 @@ swap:
   size: 2G
   maxsize: 2147483648
 
+# A pre-built mc-base snapshot (bin/server image, baked = true) already has
+# Docker, Tailscale, SOPS and the upgrades; the rest below runs on both.
+%{ if !baked ~}
 # Docker and Tailscale come from their signed apt repositories. The signing
 # keys are in infra/keys/ (fingerprints in the comments), so nothing is piped
 # from the internet into a shell.
@@ -49,6 +55,7 @@ packages:
   - docker-compose-plugin
   - tailscale
 
+%{ endif ~}
 write_files:
   - path: /etc/ssh/sshd_config.d/minecraft-hardening.conf
     content: |
@@ -64,9 +71,11 @@ runcmd:
 
   # Tailscale (installed above); restarted so the user's docker group applies.
   - sh -c "echo 'PORT=41641' > /etc/default/tailscaled"
+  - systemctl enable tailscaled
   - systemctl restart tailscaled
   - tailscale up --authkey=${ts_authkey} --ssh --hostname=${hostname} --reset
 
+%{ if !baked ~}
   # SOPS, checked against the release's SHA-256 for this CPU architecture.
   - |
     set -e
@@ -80,6 +89,7 @@ runcmd:
     echo "$sum  /tmp/sops" | sha256sum -c -
     install -m 755 /tmp/sops /usr/local/bin/sops
 
+%{ endif ~}
   # Apply SSH Hardening Config
   - systemctl reload sshd || systemctl reload ssh
 
