@@ -13,6 +13,10 @@ See [docs/performance.md](docs/performance.md). Not yet run on a real VPS.
   health check polls every 5 s while starting. A laptop `start local` went
   from 196 s to 136 s.
 - `stop` checks the backups and publishes side by side after `down`.
+- The map is also published as one `map-state.tar`; a start downloads that
+  instead of ~20,000 files (99 s → 36 s from the laptop).
+- `bin/server image` builds a pre-built `mc-base` Hetzner snapshot; a new VPS
+  starts from it when it is under 14 days old (untested on Hetzner).
 
 ## Unreleased: cheaper fallback types (2026-11-21)
 

@@ -106,9 +106,27 @@ were already pulled. Read-only, like every local copy.
 | compose-up (to healthy) | not timed | 30 s |
 
 The 60 s saved come mostly from the restore no longer waiting for the map
-pull, and from `start_interval`. The map pull is now the longest phase: tens
-of thousands of small tile files pulled one by one. That is why the map
-archive (one `map-state.tar.zst`) is the next thing to try.
+pull, and from `start_interval`. The map pull was then the longest phase:
+20,854 small files pulled one by one.
+
+### The map as one archive
+
+`publish-map.sh` now also uploads the same files as one `map-state.tar` (not
+compressed again: the tiles are .gz already). `deploy.sh` downloads and
+unpacks it, and falls back to the file-by-file pull when there is none or it
+doesn't unpack. If a stop can't replace the archive, it deletes the old one,
+so a start never unpacks an older map than `map/`.
+
+Timed from the laptop with the same 1.7 GiB map, uploaded under `perf-test/`
+in the public bucket and deleted afterwards:
+
+| | File by file | Archive |
+|---|---|---|
+| Start: pull | 99 s | **36 s** (download 32 s with 8 streams, unpack 4 s) |
+| Stop: extra work | | tar 7 s, upload 54 s (the laptop's uplink) |
+
+The stop's extra minute runs side by side with the integrity check, so it
+mostly hides behind it. On a VPS, both directions should be faster.
 
 From the game's log in the same run: the container's init (Modrinth
 resolution of the 154 pinned mods, file checks) takes about 22 s; Fabric,
@@ -117,6 +135,28 @@ after that.
 
 A laptop is not a VPS: different disk, network and CPU. The VPS numbers need
 staging runs.
+
+## The pre-built image
+
+`bin/server image` builds an `mc-base` Hetzner snapshot on a temporary
+staging VPS: the normal cloud-init install, every pinned image pulled
+(compose.yml and lib.sh's), then cloud-init, the machine ID, the SSH host
+keys and Tailscale's state wiped, a power-off, the snapshot (labels
+`mc-base=1`, `built=<date>`), and the VPS deleted. Older mc-base snapshots
+are deleted, so one is kept (about €0.01 per GB per month).
+
+A new VPS uses the newest one if it is younger than 14 days
+(`BASE_MAX_DAYS`); cloud-init then skips the apt upgrade, the installs and
+SOPS, but still writes the user, SSH hardening, Tailscale and ufw. Otherwise,
+or with `MC_BASE_IMAGE=none`, it starts from `debian-13` as before.
+`image` is in `ignore_changes`, so a newer snapshot never replaces a running
+VPS.
+
+Rebuild it weekly, and after a Renovate image bump (the old images on it are
+only a cache: compose pulls the pinned ones anyway). Running it from CI is a
+follow-up.
+
+Untested on Hetzner (see below). `tofu test` checks both cloud-inits.
 
 ## Read-only findings
 
@@ -133,29 +173,43 @@ staging runs.
 
 | Time (UTC) | Action | Type | €/h | Hours billed | € |
 |---|---|---|---|---|---|
-| | nothing created | | | | 0.00 |
+| 00:10, 00:16 | 2 × `start staging`: tofu apply failed before any server was created | cx33 | 0.0144 | 0 | 0.00 |
+| | **Total** | | | | **0.00** |
 
-## Not done yet
+## Why staging never ran: the laptop's firewall
 
-Each needs the user's go-ahead, because it spends money on Hetzner or
-publishes the branch. The handover message from the other session said the
-user approved this, but that approval wasn't given in this session, so these
-waited.
+Both `start staging` tries failed in `tofu apply` with
+`dial tcp 213.239.246.78:443: i/o timeout` (Hetzner) and the same for
+Tailscale's API. `curl` to the same address worked at the same time, and
+OpenTofu itself reached R2 (the state). The difference: the providers are
+separate programs, and this worktree downloaded its own copies into
+`/Users/kaktus/dev/mc-perf/infra/.terraform/providers/`. **LuLu** runs on the laptop, and it
+blocks new programs until someone allows them. That is very likely the cause.
+Nothing was created at Hetzner (checked with the API).
 
-| Item | State | Why |
+To unblock: allow the hcloud, tailscale and cloudflare providers under that
+path in LuLu (or run staging from a checkout whose providers are already
+allowed), then `bin/server start staging`. Changing firewall rules is the
+user's call, so it was left alone.
+
+## State of every item
+
+| Item | State | Note |
 |---|---|---|
-| Push the branch, draft PR | skipped | needs the user's OK in this session |
-| Staging baseline (3 cycles on cx33) | untested | needs a pushed branch and Hetzner spending |
-| Quick wins on a real VPS | untested | same |
-| Faster stop on a real VPS | untested | same; needs a staging variant with a local restic repo |
-| Pre-built Hetzner snapshot (`bin/server image`) | not built | biggest expected gain (cloud-init's apt upgrade and installs, the image pulls); only worth building with staging runs to prove it and the fallback |
-| Map as one archive | not built | the map pull (99 s) makes it worth it, but a test needs a write under `perf-test/` in the public bucket |
-| Server type benchmark (spark) | untested | needs staging servers |
-| `tofu plan` on the real VPS shows no changes | untested | `tofu test` with mocked providers checks the plan's shape; a real plan was not run |
+| Phase timings | passed (laptop) | unit tests, real `start local` |
+| Staging target | untested on Hetzner | blocked by the firewall; unit tests and `tofu test` pass |
+| Baseline, 3 staging cycles | untested | same |
+| Tailscale every 2 s | untested on a VPS | unit tests |
+| Health check `start_interval` | passed (laptop) | |
+| `fix_owner` | passed | a real Docker volume, real `start local` |
+| Restore and map pull side by side | passed (laptop) | 196 s → 136 s |
+| Map archive | passed (laptop round trip) | 99 s → 36 s; deploy.sh's path is unit-tested only |
+| Pre-built image | untested | code, unit tests and `tofu test` only |
+| Faster stop | untested on a VPS | unit tests |
+| Server type benchmark | skipped | needs staging; and the budget was €0.50 |
+| Vault copy | read-only finding | streams through the laptop; no change |
+| Modrinth and Fabric start | measured (laptop) | init about 22 s, Fabric and world about 6 s |
+| `tofu plan` on the real VPS shows no changes | untested | `tofu test` with mocked providers only |
 
-Also seen: **the real VPS was running** at 2026-11-21 ~00:00 local time
+Also seen: **the real VPS was running** around 00:00 UTC on 2026-11-21
 (`start local` said "The VPS keeps running"). Nothing here touched it.
-
-Only `start staging` itself, labels, DNS-less records and the staging key are
-new Hetzner-side behaviour; until a staging run passes, treat the staging
-code as untested.
