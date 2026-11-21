@@ -34,8 +34,10 @@ fi
 # files one by one.
 map_pull() {
   local web=/data/minecraft/${MAP_WEB#data/minecraft/}
+  # rclone copyto exits 0 when there is no archive, so check that it arrived.
   if r2_rclone root "$APP_DIR/data:/data" copyto "r2:$1/$MAP_ARCHIVE" "/data/$MAP_ARCHIVE" \
-       --multi-thread-streams 8 --stats-one-line --stats 1m 2>/dev/null; then
+       --multi-thread-streams 8 --stats-one-line --stats 1m 2>/dev/null &&
+     [[ -f "$APP_DIR/data/$MAP_ARCHIVE" ]]; then
     # shellcheck disable=SC2016 # expanded in the container
     if docker run --rm -v "$APP_DIR/data:/data" -e WEB="$web" -e ARCHIVE="/data/$MAP_ARCHIVE" "$ALPINE_IMAGE" \
          sh -c 'mkdir -p "$WEB" && tar -C "$WEB" -xf "$ARCHIVE"; status=$?; rm -f "$ARCHIVE"; exit $status'; then

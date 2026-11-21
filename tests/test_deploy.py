@@ -40,8 +40,9 @@ if name == "docker":
             seen.write(f"{os.environ['RESTIC_REPOSITORY']} {os.environ['AWS_ACCESS_KEY_ID']}\n")
     if stage == "map-pull" and "r2:pub/map" in args:
         sys.exit(1)
-    if "r2:pub/map-state.tar" in args and not os.environ.get("MOCK_ARCHIVE"):
-        sys.exit(3)  # rclone: not found
+    if "r2:pub/map-state.tar" in args and os.environ.get("MOCK_ARCHIVE"):
+        Path("data").mkdir(exist_ok=True)
+        Path("data/map-state.tar").touch()  # rclone with no archive exits 0 and writes nothing
     if any("tar -C" in arg for arg in args) and stage == "untar":
         sys.exit(1)
     if "r2:pub/map" in args and os.environ.get("RCLONE_LOG"):
@@ -186,6 +187,7 @@ class DeployTests(unittest.TestCase):
     def test_without_the_archive_the_files_are_pulled(self):
         _, result, calls = self.run_deploy(RESTORE="latest", MOCK_PUBLIC="1")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("could not unpack", result.stderr)  # no archive is no warning
         self.assertTrue(any("r2:pub/map" in call for call in calls))
         self.assertFalse(any(any("tar -C" in arg for arg in call) for call in calls))
         _, result, calls = self.run_deploy("untar", RESTORE="latest", MOCK_PUBLIC="1", MOCK_ARCHIVE="1")
