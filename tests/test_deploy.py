@@ -40,6 +40,10 @@ if name == "docker":
             seen.write(f"{os.environ['RESTIC_REPOSITORY']} {os.environ['AWS_ACCESS_KEY_ID']}\n")
     if stage == "map-pull" and "r2:pub/map" in args:
         sys.exit(1)
+    if "r2:pub/map-state.tar" in args and not os.environ.get("MOCK_ARCHIVE"):
+        sys.exit(3)  # rclone: not found
+    if any("tar -C" in arg for arg in args) and stage == "untar":
+        sys.exit(1)
     if "r2:pub/map" in args and os.environ.get("RCLONE_LOG"):
         with open(os.environ["RCLONE_LOG"], "a") as seen:
             seen.write(f"{os.environ['RCLONE_CONFIG_R2_ACCESS_KEY_ID']} {os.environ['RCLONE_CONFIG_R2_ENDPOINT']}\n")
@@ -77,7 +81,7 @@ class DeployTests(unittest.TestCase):
         env = dict(os.environ, APP_DIR=str(root), FAIL_STAGE=stage,
                    MOCK_LOG=str(log),
                    PATH=f"{binary}:{os.environ['PATH']}", **extra)
-        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE", "MOCK_PUBLIC", "RCLONE_LOG", "PHASE_LOG", "GITHUB_STEP_SUMMARY"):
+        for key in ("RESTORE", "NEW_WORLD", "BACKUPS", "RESTIC_SOURCE", "MOCK_PUBLIC", "MOCK_ARCHIVE", "RCLONE_LOG", "PHASE_LOG", "GITHUB_STEP_SUMMARY"):
             if key not in extra:
                 env.pop(key, None)
         result = subprocess.run(["bash", str(DEPLOY)], env=env,
@@ -167,6 +171,27 @@ class DeployTests(unittest.TestCase):
         chown = next(call for call in calls if any("chown" in arg for arg in call))
         self.assertIn("! -user 1000 -o ! -group 1000", chown[-1])
         self.assertNotIn("chown -R", chown[-1])
+
+    def test_the_map_archive_replaces_the_file_by_file_pull(self):
+        _, result, calls = self.run_deploy(RESTORE="latest", MOCK_PUBLIC="1", MOCK_ARCHIVE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        download = next(call for call in calls if "r2:pub/map-state.tar" in call)
+        self.assertEqual(download[download.index("r2:pub/map-state.tar") - 1:][:3],
+                         ["copyto", "r2:pub/map-state.tar", "/data/map-state.tar"])
+        unpack = next(call for call in calls if any("tar -C" in arg for arg in call))
+        self.assertIn("WEB=/data/minecraft/bluemap/web", unpack)
+        self.assertFalse(any("r2:pub/map" in call for call in calls))  # no file-by-file pull
+        self.assertIn("Unpacked the map archive", result.stdout)
+
+    def test_without_the_archive_the_files_are_pulled(self):
+        _, result, calls = self.run_deploy(RESTORE="latest", MOCK_PUBLIC="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any("r2:pub/map" in call for call in calls))
+        self.assertFalse(any(any("tar -C" in arg for arg in call) for call in calls))
+        _, result, calls = self.run_deploy("untar", RESTORE="latest", MOCK_PUBLIC="1", MOCK_ARCHIVE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("could not unpack the map archive", result.stderr)
+        self.assertTrue(any("r2:pub/map" in call for call in calls))
 
     def test_a_failed_map_pull_only_warns(self):
         _, result, calls = self.run_deploy("map-pull", RESTORE="latest", MOCK_PUBLIC="1")

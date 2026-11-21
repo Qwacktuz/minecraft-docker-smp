@@ -80,6 +80,8 @@ r2_rclone() {
 # where scripts/publish-map.sh publishes them in PUBLIC_WORLD_BUCKET.
 MAP_WEB=data/minecraft/bluemap/web
 MAP_PREFIX=map
+# The same files as one tar, next to map/: one download instead of ~20,000.
+MAP_ARCHIVE=map-state.tar
 
 # Gives the world files back to the game's user (uid 1000). Only files someone
 # else owns are changed (the map pull's, mostly): a restic restore as root

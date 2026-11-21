@@ -30,6 +30,25 @@ if [[ "${BACKUPS:-}" == 1 ]]; then
   echo "COMPOSE_PROFILES=backup" >> "$ENV_FILE"
 fi
 
+# `map_pull <bucket>`: the map archive in one download, or, without one, the
+# files one by one.
+map_pull() {
+  local web=/data/minecraft/${MAP_WEB#data/minecraft/}
+  if r2_rclone root "$APP_DIR/data:/data" copyto "r2:$1/$MAP_ARCHIVE" "/data/$MAP_ARCHIVE" \
+       --multi-thread-streams 8 --stats-one-line --stats 1m 2>/dev/null; then
+    # shellcheck disable=SC2016 # expanded in the container
+    if docker run --rm -v "$APP_DIR/data:/data" -e WEB="$web" -e ARCHIVE="/data/$MAP_ARCHIVE" "$ALPINE_IMAGE" \
+         sh -c 'mkdir -p "$WEB" && tar -C "$WEB" -xf "$ARCHIVE"; status=$?; rm -f "$ARCHIVE"; exit $status'; then
+      echo "Unpacked the map archive."
+      return 0
+    fi
+    echo "warning: could not unpack the map archive; pulling the files instead" >&2
+  fi
+  r2_rclone root "$APP_DIR/data/minecraft:/data" \
+    copy "r2:$1/$MAP_PREFIX" "/data/${MAP_WEB#data/minecraft/}" \
+    --fast-list --transfers 32 --stats-one-line --stats 1m
+}
+
 compose=(docker compose --env-file "$ENV_FILE")
 "${compose[@]}" config --quiet
 
@@ -87,9 +106,7 @@ if [[ -n "${RESTORE:-}" ]]; then
     map_job=
     if [[ -n "$public_bucket" ]]; then
       echo "Pulling the published map (BlueMap then renders only what changed)..."
-      timed map-pull r2_rclone root "$APP_DIR/data/minecraft:/data" \
-        copy "r2:$public_bucket/$MAP_PREFIX" "/data/${MAP_WEB#data/minecraft/}" \
-        --fast-list --transfers 32 --stats-one-line --stats 1m &
+      timed map-pull map_pull "$public_bucket" &
       map_job=$!
     fi
     restore_status=0
