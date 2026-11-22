@@ -15,6 +15,9 @@
 #   bin/server stop staging  delete the staging VPS (nothing is backed up)
 #   bin/server image         build the pre-built mc-base Hetzner snapshot that new
 #                            VPSs start from (rebuild weekly, or after an image bump)
+#   bin/server image --if-played  the weekly job (.github/workflows/image.yml):
+#                            rebuild only if the world ran in the last 7 days;
+#                            delete the image after 30 days without play
 #   bin/server prune         delete rarely visited chunks on the VPS (--dry-run)
 #   bin/server vault         copy the backups into the locked vault bucket now
 #   bin/server tofu <args>   run OpenTofu by hand with the infra secrets
@@ -641,6 +644,49 @@ hcloud_api() {
     curl -fsS -m 30 -K - -X "$1" ${data[@]+"${data[@]}"} "https://api.hetzner.cloud/v1$2"
 }
 # Prints the ID of the newest mc-base snapshot younger than BASE_MAX_DAYS.
+# Prints the newest mc-base snapshot's age in whole days, or "none".
+base_image_age() {
+  hcloud_api GET "/images?type=snapshot&label_selector=mc-base%3D1&sort=created:desc" |
+    jq -r '.images[0] // empty | (now - (.created | sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601)) / 86400 | floor' |
+    grep . || echo none
+}
+# Deletes every mc-base snapshot (nobody plays: no storage cost until the next build).
+drop_base_images() {
+  local id
+  for id in $(hcloud_api GET "/images?type=snapshot&label_selector=mc-base%3D1" | jq -r '.images[].id'); do
+    hcloud_api DELETE "/images/$id" >/dev/null || return 1
+    echo "Deleted the mc-base snapshot $id."
+  done
+}
+
+# The weekly job. The newest VPS backup tells when the world last ran (the VPS
+# backs up every hour and at each stop). Played in the last PLAY_DAYS: rebuild,
+# unless the image is newer than a week anyway. Not played for DROP_DAYS:
+# delete the image. Otherwise nothing happens, and nothing is paid but storage.
+PLAY_DAYS=${PLAY_DAYS:-7}
+DROP_DAYS=${DROP_DAYS:-30}
+image_if_played() {
+  local latest played age
+  latest=$(laptop_restic --no-lock snapshots --host "$WORLD_HOST" --latest 1 --json | snapshot_list | head -n1) ||
+    die "could not read when the world last ran"
+  played=$(( ($(date +%s) - ${latest% *}) / 86400 ))
+  age=$(secrets infra _base-image-age) || die "could not read the mc-base image from Hetzner"
+  [[ "$age" =~ ^([0-9]+|none)$ ]] || die "unexpected image age '$age'"
+  if (( played < PLAY_DAYS )); then
+    if [[ "$age" != none ]] && (( age < PLAY_DAYS - 1 )); then
+      say "The world ran $played day(s) ago, but the image is only $age day(s) old; keeping it."
+      return
+    fi
+    say "The world ran $played day(s) ago; rebuilding the image."
+    build_image
+  elif [[ "$age" != none ]] && (( played >= DROP_DAYS )); then
+    say "Nobody has played for $played days; deleting the image (the next start uses debian-13)."
+    secrets infra _drop-base-images || die "could not delete the mc-base image"
+  else
+    say "Nobody played in the last $PLAY_DAYS days (last: $played day(s) ago); nothing to do."
+  fi
+}
+
 base_image_id() {
   hcloud_api GET "/images?type=snapshot&label_selector=mc-base%3D1&sort=created:desc" |
     jq -r --argjson max "$((BASE_MAX_DAYS * 86400))" \
@@ -1038,7 +1084,8 @@ case "${1:-} ${2:-}" in
   "start local") start_local ;;
   "start vps") start_vps ;;
   "start staging") start_staging ;;
-  "image "*) build_image ;;
+  "image ") build_image ;;
+  "image --if-played") image_if_played ;;
   "stop "*) stop "${2:-}" ;;
   "status "*) status ;;
   "prune "*) prune "${2:-}" ;;
@@ -1064,6 +1111,8 @@ case "${1:-} ${2:-}" in
   "_web-deploy "*) web_deploy ;;
   "_restic "*) shift; restic "$@" ;;
   "_base-image "*) base_image_id ;;
+  "_base-image-age "*) base_image_age ;;
+  "_drop-base-images "*) drop_base_images ;;
   "_snapshot "*) snapshot_server "$2" ;;
   "_check "*) RESTIC_NO_LOCK=1 APP_DIR="$ROOT" bash "$ROOT/scripts/test-backup.sh" "$2" ;;
   "_deploy "*) bash "$ROOT/scripts/deploy.sh" ;;
