@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased: update and Cloudflare docs (2026-11-22)
+
+- [docs/updates.md](docs/updates.md): adding and removing a mod, the weekly
+  mod PR, a new Minecraft or Java version step by step, and where every
+  version, ID and digest comes from.
+- [docs/runbook.md](docs/runbook.md): about 50 admin scenarios (everyday,
+  players, changes, backups, pruning, troubleshooting) with the commands to run
+  in order, and the server types' prices.
+- README: staging in the command list and its own paragraph, and what runs on
+  Cloudflare (the two Workers, and what isn't a Worker).
+
 ## Unreleased: the image rebuilds itself when people play (2026-11-21)
 
 - `.github/workflows/image.yml` runs `bin/server image --if-played` every
