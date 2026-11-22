@@ -78,7 +78,7 @@ services:
         ferrite-core:d5ddUdiB # 9.0.0-fabric
         lithium:Lal8mJGR # mc26.3-0.26.4-fabric
         scalablelux:g4eqNSKd # 0.3.0-alpha.0.6+26.3 [alpha]
-        c2me-fabric:Qfm2hhas # 0.4.2-alpha.0.121+26.3 [alpha]
+        c2me-fabric:silzGoWa # 0.4.2-alpha.0.124+26.3 [alpha]
         servercore:YNdFPSov # 1.5.21+26.3
         alternate-current:nSBWPz6x # mc26.3-1.9.0
         clumps:J4I1wxJZ # 26.3.2
@@ -99,7 +99,7 @@ services:
         carpet:yt9oDFOj # 26.3
         carpet-tis-addition:Zo8yy53j # v1.83.3-mc26.3
         gca:8yK6Cys7 # v2.12.10+build.105
-        no-chat-reports:9PkfND1A # Fabric-MC26.3-v2.21.2
+        no-chat-reports:e3GIS0Ep # Fabric-MC26.3-v2.21.3
         # No chunky: pre-generated chunks are exactly what pruning deletes (docs/pruning.md).
         packet-fixer:dTKbGYbb # 3.3.6
         luckperms:DzQPkkXY # v5.5.85-fabric
