@@ -1,5 +1,8 @@
 # Minecraft SMP
 
+**Admins:** what to run for each task or problem is in
+[docs/runbook.md](docs/runbook.md).
+
 A Fabric Minecraft server in Docker Compose. The world is backed up with Restic
 to Cloudflare R2. It runs either on your laptop or on a Hetzner VPS created on
 demand with OpenTofu, which is deleted again when you stop it.
@@ -17,6 +20,8 @@ server status            # where is it running, and when was the last backup?
 server prune --dry-run   # which unused chunks would pruning delete?
 server prune             # back up, then delete unused chunks on the VPS
 server vault             # copy the backups into the locked vault bucket now
+server start staging     # a throwaway test VPS (mc-staging) from the newest backup
+server stop staging      # delete it again (nothing is backed up)
 server tofu plan         # run OpenTofu by hand with the encrypted credentials
 server watchdog          # deploy the idle auto-stop Worker (watchdog/)
 server web               # deploy the web app (web/) to smp.cactuz.dev
@@ -27,6 +32,15 @@ runs. It restores the VPS's newest backup and runs this checkout (e.g. `dev`),
 so you can try mods or config offline while players stay on `main`. Nothing
 done locally reaches R2. `server start vps` from the laptop asks first when
 HEAD isn't on `main`; the GitHub "Run workflow" button always deploys `main`.
+
+**Testing on real hardware:** `server start staging` creates a second VPS,
+`mc-staging`, and restores the newest backup on it, to try a commit on the same
+kind of machine players use (e.g. a new game version). It has its own OpenTofu
+state, firewall and SSH key, no DNS, no backups (read-only toward R2), and
+publishes nothing: no world.zip, map, web status, vault copy or Discord post.
+The commit must be pushed but needn't be on `main`. `server stop staging`
+deletes it. It costs the server type's hourly price while it exists. Details and
+start-time measurements: [docs/performance.md](docs/performance.md#staging).
 
 Backups, from the laptop with no VPS needed (read-only):
 
@@ -128,6 +142,24 @@ the Tailscale app, and your Age key in `SOPS_AGE_KEY_FILE` (default
 The world is in `data/minecraft` (gitignored). On the VPS, the app lives in `~/app`.
 Restores, rollbacks, drills and recovery by hand: [docs/backup.md](docs/backup.md).
 
+**On Cloudflare.** Cloudflare Workers are small JavaScript programs that
+Cloudflare runs on its own machines, started by a web request or a timer (a
+cron trigger), with no server to keep running. They can use Cloudflare's
+storage: KV (a small key-value store) and R2 (S3-like buckets). Two Workers
+belong to this project, both on the free plan. Neither runs the game or touches
+the world; each can only start the GitHub Server workflow:
+
+| Worker | Runs | Does |
+|---|---|---|
+| `mc-idle-watchdog` (`watchdog/`, `server watchdog`) | every 5 minutes | pings the game; after 2 idle hours or 14 days up it starts the Server workflow with `stop`; counts VPS hours per month in KV; posts auto-stops to Discord ([docs/auto-stop.md](docs/auto-stop.md)) |
+| `mc-smp-web` (`web/`, `server web`) | on each request to smp.cactuz.dev | the status page, leaderboard and `/admin` with Start/Stop ([docs/web.md](docs/web.md)) |
+
+The rest of Cloudflare here isn't a Worker: DNS for `mc.cactuz.dev`, the R2
+buckets (backups, vault, public world and map, the web app's data, the OpenTofu
+state) and Cloudflare Access in front of `/admin`. If the Workers are down the
+server still starts and stops from the laptop or GitHub, but nothing stops an
+idle VPS.
+
 Useful commands from the app directory:
 
 ```bash
@@ -202,11 +234,11 @@ The Dependency Dashboard issue lists everything pending. Not covered:
   `scripts/pin_mods.py --write` every Monday and opens one PR against `dev`
   (never automerged). Run it by hand with `python3 scripts/pin_mods.py`
   (`--write` to apply).
-- The game version (`VERSION` in compose.yml). To move to a new one: set
-  `VERSION`, run `python3 scripts/pin_mods.py --write`, comment out the mods it
-  warns about, and test on a local core.
+- The game version (`VERSION` in compose.yml) and the Java line.
 
-Bump those by hand.
+Bump those by hand. Adding a mod, a new Minecraft or Java version step by
+step, and where every version and digest comes from:
+[docs/updates.md](docs/updates.md).
 
 ## Development environment
 
