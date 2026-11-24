@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: TypeScript stays on 6 (2026-11-24)
+
+- `renovate.json`: `typescript` held below 7. TypeScript 7 has no JavaScript
+  compiler API, so `@sveltejs/kit` 3.4 won't load (`vite build`, `vitest` and
+  `svelte-check` all fail) and npm refuses the lockfile (both kit and
+  svelte-check cap it at `^6`). Renovate closes the TypeScript 7 PR. See
+  [docs/updates.md](docs/updates.md) for when to lift it.
+
 ## Unreleased: update and Cloudflare docs (2026-11-22)
 
 - [docs/updates.md](docs/updates.md): adding and removing a mod, the weekly
