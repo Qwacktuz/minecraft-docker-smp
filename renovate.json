@@ -89,6 +89,13 @@
       "allowedVersions": "<26"
     },
     {
+      "description": "TypeScript 7 (the native Go port) has no JavaScript compiler API, which @sveltejs/kit 3.4 and svelte-check 4.7 need (both cap it at ^6). Lift this once they accept 7.",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7"
+    },
+    {
       "description": "Game server: calendar releases on the java25 line only",
       "matchPackageNames": [
         "itzg/minecraft-server"
