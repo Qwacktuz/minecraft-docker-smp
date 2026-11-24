@@ -1,7 +1,15 @@
 # Changelog
 
-## Unreleased: TypeScript stays on 6 (2026-11-24)
+## Unreleased: dependency updates, TypeScript stays on 6 (2026-11-24)
 
+- `itzg/minecraft-server` 2026.11.0-java25 → 2026.11.1-java25 (new digest).
+- `web/`: `@sveltejs/vite-plugin-svelte` 7.3.2, `@cloudflare/workers-types`
+  5.20261124.1, wrangler 4.167.0 (lockfile). `allowScripts` now names
+  `workerd@1.20261123.1` instead of 1.20261118.1, which nothing installs any
+  more.
+- Already newest: every mod and the Fabric loader (`pin_mods.py`), Minecraft
+  26.3 (26.4 is still in snapshots), the other images, the Actions, devenv
+  2.4.0 and the OpenTofu providers.
 - `renovate.json`: `typescript` held below 7. TypeScript 7 has no JavaScript
   compiler API, so `@sveltejs/kit` 3.4 won't load (`vite build`, `vitest` and
   `svelte-check` all fail) and npm refuses the lockfile (both kit and
