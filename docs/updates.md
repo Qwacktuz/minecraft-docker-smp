@@ -161,3 +161,18 @@ patch updates merge themselves once CI passes; you merge minor and major ones.
 The Dependency Dashboard issue lists what's pending. After an image update,
 nothing else is needed: the next start pulls the new image (a few seconds
 slower until the next weekly `mc-base` image build).
+
+TypeScript in `web/` is held below 7 (`allowedVersions` in `renovate.json`):
+TypeScript 7 drops the JavaScript compiler API that SvelteKit and
+svelte-check use, and SvelteKit stops with `typescript_compiler_api_missing`.
+To check whether they support it yet:
+
+```bash
+npm view @sveltejs/kit peerDependencies.typescript
+```
+
+```bash
+npm view svelte-check peerDependencies.typescript
+```
+
+When both accept `^7`, remove the rule; Renovate then opens the PR again.
